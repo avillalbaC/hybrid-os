@@ -143,7 +143,7 @@ function PreviewCard({ session }: { session: TrainingSession }) {
 }
 
 export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession[] }) {
-  const { sessions: existingSessions } = useTrainingSessions(seedSessions);
+  const { sessions: existingSessions, pendingSessions, source } = useTrainingSessions(seedSessions);
   const [rawJson, setRawJson] = useState(sampleInput);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -299,9 +299,15 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
       <Card>
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">Previsualización</h3>
-          <Badge tone={validation.status === "valid" ? "accent" : validation.status === "error" ? "warning" : "neutral"}>
-            {validation.status}
-          </Badge>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
+              {source === "remote" ? "Duplicados contra Supabase" : source === "seed-fallback" ? "Duplicados contra fallback" : "sincronizando"}
+            </Badge>
+            {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
+            <Badge tone={validation.status === "valid" ? "accent" : validation.status === "error" ? "warning" : "neutral"}>
+              {validation.status}
+            </Badge>
+          </div>
         </div>
         <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{validation.message}</p>
         {saveMessage ? (

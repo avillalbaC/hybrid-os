@@ -14,12 +14,6 @@ export const dashboardPeriods: Array<{ value: DashboardPeriod; label: string }> 
   { value: "all", label: "Todo" },
 ];
 
-const periodDays: Record<Exclude<DashboardPeriod, "all">, number> = {
-  week: 7,
-  month: 30,
-  year: 365,
-};
-
 export function parseDashboardDate(date: string | Date) {
   const parsed = date instanceof Date ? new Date(date) : new Date(`${date}T00:00:00`);
   parsed.setHours(0, 0, 0, 0);
@@ -38,6 +32,37 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
+function startOfWeek(date: Date) {
+  const start = parseDashboardDate(date);
+  const day = start.getDay() || 7;
+  start.setDate(start.getDate() - (day - 1));
+  return start;
+}
+
+function endOfWeek(date: Date) {
+  return endOfDay(addDays(startOfWeek(date), 6));
+}
+
+function startOfMonth(date: Date) {
+  const current = parseDashboardDate(date);
+  return new Date(current.getFullYear(), current.getMonth(), 1);
+}
+
+function endOfMonth(date: Date) {
+  const current = parseDashboardDate(date);
+  return endOfDay(new Date(current.getFullYear(), current.getMonth() + 1, 0));
+}
+
+function startOfYear(date: Date) {
+  const current = parseDashboardDate(date);
+  return new Date(current.getFullYear(), 0, 1);
+}
+
+function endOfYear(date: Date) {
+  const current = parseDashboardDate(date);
+  return endOfDay(new Date(current.getFullYear(), 11, 31));
+}
+
 export function getLatestDate<T extends { date: string }>(items: T[]) {
   if (items.length === 0) {
     return null;
@@ -49,13 +74,39 @@ export function getLatestDate<T extends { date: string }>(items: T[]) {
   }, null);
 }
 
+export function resolvePeriodReferenceDate(period: DashboardPeriod, latestDate: Date | null, today: Date = new Date()) {
+  const currentDate = parseDashboardDate(today);
+
+  if (!latestDate || period === "all") {
+    return currentDate;
+  }
+
+  const currentRange = getPeriodRange(period, currentDate);
+
+  if (currentRange && latestDate.getTime() >= currentRange.start.getTime() && latestDate.getTime() <= currentRange.end.getTime()) {
+    return currentDate;
+  }
+
+  return latestDate;
+}
+
 export function getPeriodRange(period: DashboardPeriod, referenceDate: string | Date = new Date()) {
   if (period === "all") {
     return null;
   }
 
-  const end = endOfDay(parseDashboardDate(referenceDate));
-  const start = addDays(parseDashboardDate(referenceDate), -(periodDays[period] - 1));
+  const reference = parseDashboardDate(referenceDate);
+
+  if (period === "week") {
+    return { start: startOfWeek(reference), end: endOfWeek(reference) };
+  }
+
+  if (period === "month") {
+    return { start: startOfMonth(reference), end: endOfMonth(reference) };
+  }
+
+  const start = startOfYear(reference);
+  const end = endOfYear(reference);
 
   return { start, end };
 }
@@ -71,8 +122,19 @@ export function getPreviousPeriodRange(period: DashboardPeriod, referenceDate: s
     return null;
   }
 
-  const end = endOfDay(addDays(currentRange.start, -1));
-  const start = addDays(currentRange.start, -periodDays[period]);
+  if (period === "week") {
+    const previousReference = addDays(currentRange.start, -1);
+    return { start: startOfWeek(previousReference), end: endOfWeek(previousReference) };
+  }
+
+  if (period === "month") {
+    const previousReference = new Date(currentRange.start.getFullYear(), currentRange.start.getMonth() - 1, 1);
+    return { start: startOfMonth(previousReference), end: endOfMonth(previousReference) };
+  }
+
+  const previousReference = new Date(currentRange.start.getFullYear() - 1, 0, 1);
+  const start = startOfYear(previousReference);
+  const end = endOfYear(previousReference);
 
   return { start, end };
 }
@@ -87,7 +149,7 @@ export function filterSessionsByPeriod(sessions: TrainingSession[], period: Dash
     return sessions;
   }
 
-  const referenceDate = getLatestDate(sessions);
+  const referenceDate = resolvePeriodReferenceDate(period, getLatestDate(sessions));
 
   if (!referenceDate) {
     return [];
@@ -110,10 +172,10 @@ export function getPeriodTitle(period: DashboardPeriod) {
 
 export function getPeriodDetail(period: DashboardPeriod) {
   const labels: Record<DashboardPeriod, string> = {
-    week: "Últimos 7 días",
-    month: "Últimos 30 días",
-    year: "Últimos 365 días",
-    all: "Todos los registros",
+    week: "Semana actual",
+    month: "Mes actual",
+    year: "Año actual",
+    all: "Histórico completo",
   };
 
   return labels[period];

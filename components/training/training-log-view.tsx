@@ -47,10 +47,10 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
 
       <section className="mb-5 flex flex-wrap gap-2" aria-label="Filtros visuales por tipo">
         <Badge tone="accent">Todos {sessions.length}</Badge>
-        <Badge tone={source === "remote" ? "accent" : source === "local-fallback" ? "warning" : "neutral"}>
-          {source === "remote" ? "Supabase activo" : source === "local-fallback" ? "modo local" : "sincronizando"}
+        <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
+          {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
         </Badge>
-        {storedSessions.length > 0 ? <Badge>{storedSessions.length} locales</Badge> : null}
+        {storedSessions.length > 0 ? <Badge tone="warning">{storedSessions.length} pendientes locales</Badge> : null}
         {Object.entries(sessionsByType).map(([type, count]) => (
           <Badge key={type}>{formatTrainingType(type)} {count}</Badge>
         ))}

@@ -11,7 +11,7 @@ import { formatDate, formatTrainingType } from "@/lib/utils/format";
 import type { TrainingSession } from "@/types/training";
 
 export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSession[] }) {
-  const { sessions, syncMessage } = useTrainingSessions(seedSessions);
+  const { sessions, pendingSessions, source, syncMessage } = useTrainingSessions(seedSessions);
   const runningSessions = getRunningSessions(sessions);
   const runningWeeks = groupRunningSessionsByWeek(sessions);
   const { currentWeekKey, previousWeekKey } = getLatestWeekSessions(sessions);
@@ -29,6 +29,12 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
         description="Running puro, HYROX y sesiones mixtas con metros de carrera acumulados."
       />
 
+      <section className="mb-5 flex flex-wrap gap-2">
+        <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
+          {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
+        </Badge>
+        {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
+      </section>
       {syncMessage ? <p className="mb-5 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-3 text-sm text-[var(--muted-strong)]">{syncMessage}</p> : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -88,4 +94,3 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
     </>
   );
 }
-

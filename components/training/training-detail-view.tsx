@@ -33,7 +33,7 @@ export function TrainingDetailView({
   seedSessions: TrainingSession[];
 }) {
   const router = useRouter();
-  const { sessions, hasHydrated, saveSession, deleteSession, syncMessage } = useTrainingSessions(seedSessions);
+  const { sessions, pendingSessions, source, hasHydrated, saveSession, deleteSession, syncMessage } = useTrainingSessions(seedSessions);
   const session = sessions.find((item) => item.id === sessionId);
   const [isEditing, setIsEditing] = useState(false);
   const [editMessage, setEditMessage] = useState<string | null>(null);
@@ -149,6 +149,10 @@ export function TrainingDetailView({
         ))}
         <Badge>RPE {session.rpe ?? "-"}/10</Badge>
         <Badge>{session.durationMinutes ?? "-"} min</Badge>
+        <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
+          {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
+        </Badge>
+        {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
         {syncMessage ? <Badge tone="warning">{syncMessage}</Badge> : null}
       </section>
 

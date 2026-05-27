@@ -19,6 +19,7 @@ import {
   getPreviousPeriodLabel,
   getPreviousPeriodRange,
   isDateInRange,
+  resolvePeriodReferenceDate,
 } from "./periods";
 
 export type DeltaMode = "percent" | "points" | "absolute";
@@ -157,7 +158,7 @@ function calculateDashboardAlerts({
   if (period === "week" && runningSessions < 2) {
     alerts.push({
       title: "Baja frecuencia de running",
-      detail: `${runningSessions} sesiones con carrera en los últimos 7 días.`,
+      detail: `${runningSessions} sesiones con carrera en la semana actual.`,
       tone: "warning",
     });
   }
@@ -290,7 +291,7 @@ export function calculateDashboardMetrics(
   nutritionChecks: NutritionCheck[],
   period: DashboardPeriod,
 ): DashboardMetrics {
-  const referenceDate = getLatestDashboardDate(sessions, bodyChecks, nutritionChecks);
+  const referenceDate = resolvePeriodReferenceDate(period, getLatestDashboardDate(sessions, bodyChecks, nutritionChecks));
   const sessionPeriods = getPeriodItems(sessions, period, referenceDate);
   const bodyPeriods = getPeriodItems(bodyChecks, period, referenceDate);
   const nutritionPeriods = getPeriodItems(nutritionChecks, period, referenceDate);

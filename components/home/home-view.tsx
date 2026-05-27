@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { MuscleLoadList } from "@/components/muscle-load/muscle-load-list";
 import { TrainingSessionCard } from "@/components/training/training-session-card";
 import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
-import { compareWeeks, getSessionsByWeek } from "@/lib/selectors/training";
+import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
+import { compareWeeks } from "@/lib/selectors/training";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
 import type { BodyCheck } from "@/types/body";
 import type { NutritionCheck } from "@/types/nutrition";
@@ -38,11 +40,10 @@ export function HomeView({
   bodyChecks: BodyCheck[];
   nutritionChecks: NutritionCheck[];
 }) {
-  const { sessions: combinedSessions, syncMessage } = useTrainingSessions(sessions);
+  const { sessions: combinedSessions, pendingSessions, source, syncMessage } = useTrainingSessions(sessions);
   const metrics = calculateDashboardMetrics(combinedSessions, bodyChecks, nutritionChecks, "week");
-  const weeks = getSessionsByWeek(combinedSessions);
-  const weekKeys = Object.keys(weeks).sort().reverse();
-  const weeklyComparison = compareWeeks(weeks[weekKeys[0]] ?? [], weeks[weekKeys[1]] ?? []);
+  const { currentWeekSessions, previousWeekSessions } = getLatestWeekSessions(combinedSessions);
+  const weeklyComparison = compareWeeks(currentWeekSessions, previousWeekSessions);
   const latestSession = metrics.recentSessions[0] ?? null;
 
   return (
@@ -53,9 +54,15 @@ export function HomeView({
           <h2 className="mt-3 max-w-3xl text-4xl font-black tracking-tight text-[var(--foreground)] sm:text-6xl">
             Estado actual.
           </h2>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">
-            Señales principales para decidir si hoy toca empujar, sostener o recuperar.
-          </p>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">
+              Señales principales para decidir si hoy toca empujar, sostener o recuperar.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
+                {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
+              </Badge>
+              {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
+            </div>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href="/training/import"

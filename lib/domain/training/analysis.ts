@@ -1,4 +1,11 @@
-import { getRecentSessions, getSessionsByWeek, getWeekKey } from "@/lib/selectors/training";
+import {
+  getLatestDate,
+  getPeriodRange,
+  getPreviousPeriodRange,
+  isDateInRange,
+  resolvePeriodReferenceDate,
+} from "@/lib/domain/dashboard/periods";
+import { getRecentSessions, getWeekKey } from "@/lib/selectors/training";
 import type { MuscleName, TrainingExercise, TrainingSession } from "@/types/training";
 
 export type RunningSessionSummary = {
@@ -21,14 +28,17 @@ export type MuscleExerciseContribution = {
 };
 
 export function getLatestWeekSessions(sessions: TrainingSession[]) {
-  const weeks = getSessionsByWeek(sessions);
-  const weekKeys = Object.keys(weeks).sort().reverse();
+  const referenceDate = resolvePeriodReferenceDate("week", getLatestDate(sessions));
+  const currentRange = getPeriodRange("week", referenceDate);
+  const previousRange = getPreviousPeriodRange("week", referenceDate);
+  const currentWeekSessions = currentRange ? sessions.filter((session) => isDateInRange(session.date, currentRange)) : [];
+  const previousWeekSessions = previousRange ? sessions.filter((session) => isDateInRange(session.date, previousRange)) : [];
 
   return {
-    currentWeekKey: weekKeys[0] ?? "empty",
-    previousWeekKey: weekKeys[1] ?? "empty",
-    currentWeekSessions: weeks[weekKeys[0]] ?? [],
-    previousWeekSessions: weeks[weekKeys[1]] ?? [],
+    currentWeekKey: currentWeekSessions[0] ? getWeekKey(currentWeekSessions[0].date) : currentRange ? getWeekKey(currentRange.start.toISOString().slice(0, 10)) : "empty",
+    previousWeekKey: previousWeekSessions[0] ? getWeekKey(previousWeekSessions[0].date) : previousRange ? getWeekKey(previousRange.start.toISOString().slice(0, 10)) : "empty",
+    currentWeekSessions,
+    previousWeekSessions,
   };
 }
 
@@ -89,4 +99,3 @@ export function getMuscleExerciseContributions(sessions: TrainingSession[], musc
     )
     .sort((a, b) => b.load - a.load);
 }
-

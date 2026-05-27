@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -12,7 +13,7 @@ import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
 import type { TrainingSession } from "@/types/training";
 
 export function WeeklyTrainingView({ seedSessions }: { seedSessions: TrainingSession[] }) {
-  const { sessions, syncMessage } = useTrainingSessions(seedSessions);
+  const { sessions, pendingSessions, source, syncMessage } = useTrainingSessions(seedSessions);
   const { currentWeekKey, previousWeekKey, currentWeekSessions, previousWeekSessions } = getLatestWeekSessions(sessions);
   const comparison = compareWeeks(currentWeekSessions, previousWeekSessions);
   const topMuscles = getTopMuscles(currentWeekSessions, 6);
@@ -33,6 +34,12 @@ export function WeeklyTrainingView({ seedSessions }: { seedSessions: TrainingSes
         }
       />
 
+      <section className="mb-5 flex flex-wrap gap-2">
+        <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
+          {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
+        </Badge>
+        {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
+      </section>
       {syncMessage ? <p className="mb-5 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-3 text-sm text-[var(--muted-strong)]">{syncMessage}</p> : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -100,4 +107,3 @@ export function WeeklyTrainingView({ seedSessions }: { seedSessions: TrainingSes
     </>
   );
 }
-

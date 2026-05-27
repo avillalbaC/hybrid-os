@@ -8,10 +8,12 @@ export function TrainingSessionCard({
   syncStatus,
   onDelete,
 }: {
-  session: TrainingSession;
+  session: TrainingSession & { pendingSync?: boolean; dataSource?: "remote" | "seed" | "local-pending" };
   syncStatus?: "remote" | "pending" | "seed";
   onDelete?: (id: string) => void;
 }) {
+  const resolvedSyncStatus = syncStatus ?? (session.pendingSync ? "pending" : session.dataSource === "remote" ? "remote" : session.dataSource === "seed" ? "seed" : undefined);
+
   return (
     <article className="group rounded-md border border-[var(--line)] bg-[linear-gradient(180deg,var(--panel-strong),var(--panel))] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:border-[rgba(56,217,159,0.28)] hover:shadow-[0_26px_90px_rgba(0,0,0,0.34)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -21,9 +23,9 @@ export function TrainingSessionCard({
             {session.dateConfidence === "inferred" ? <Badge tone="warning">fecha inferida</Badge> : null}
             {session.source === "import" ? <Badge>importado</Badge> : null}
             {session.dataQuality ? <Badge>{formatDataQuality(session.dataQuality)}</Badge> : null}
-            {syncStatus === "remote" ? <Badge tone="accent">Supabase</Badge> : null}
-            {syncStatus === "pending" ? <Badge tone="warning">pendiente local</Badge> : null}
-            {syncStatus === "seed" ? <Badge>seed</Badge> : null}
+            {resolvedSyncStatus === "remote" ? <Badge tone="accent">Supabase</Badge> : null}
+            {resolvedSyncStatus === "pending" ? <Badge tone="warning">pendiente local</Badge> : null}
+            {resolvedSyncStatus === "seed" ? <Badge>seed</Badge> : null}
           </div>
           <Link href={`/training/${session.id}`} className="mt-2 block text-lg font-black tracking-tight text-[var(--foreground)] transition group-hover:text-[var(--accent-strong)]">
             {session.title}

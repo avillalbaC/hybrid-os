@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { MuscleLoadList } from "@/components/muscle-load/muscle-load-list";
@@ -9,7 +10,8 @@ import { TrainingSessionCard } from "@/components/training/training-session-card
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { DisciplinesOverview } from "@/components/dashboard/disciplines-overview";
 import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
-import { compareWeeks, getSessionsByWeek } from "@/lib/selectors/training";
+import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
+import { compareWeeks } from "@/lib/selectors/training";
 import { useDashboardData } from "@/lib/storage/use-dashboard-data";
 import type { DashboardPeriod } from "@/lib/domain/dashboard/periods";
 import type { BodyCheck } from "@/types/body";
@@ -30,6 +32,7 @@ export function DashboardView({
     sessions: dashboardSessions,
     bodyChecks: dashboardBodyChecks,
     nutritionChecks: dashboardNutritionChecks,
+    source,
     message: syncMessage,
   } = useDashboardData({
     seedSessions: sessions,
@@ -41,12 +44,9 @@ export function DashboardView({
     [dashboardBodyChecks, dashboardNutritionChecks, dashboardSessions, period],
   );
   const weeklyComparison = useMemo(() => {
-    const weeks = getSessionsByWeek(dashboardSessions);
-    const weekKeys = Object.keys(weeks).sort().reverse();
-    const currentWeek = weeks[weekKeys[0]] ?? [];
-    const previousWeek = weeks[weekKeys[1]] ?? [];
+    const { currentWeekSessions, previousWeekSessions } = getLatestWeekSessions(dashboardSessions);
 
-    return compareWeeks(currentWeek, previousWeek);
+    return compareWeeks(currentWeekSessions, previousWeekSessions);
   }, [dashboardSessions]);
 
   return (
@@ -63,6 +63,11 @@ export function DashboardView({
             <p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">
               Entrenamiento, carga muscular, nutrición y señales corporales en una vista de decisión rápida.
             </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
+                {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
+              </Badge>
+            </div>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap lg:items-center lg:justify-end">
             <PeriodSelector value={period} onChange={setPeriod} />

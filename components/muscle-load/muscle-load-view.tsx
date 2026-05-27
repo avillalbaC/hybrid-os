@@ -8,24 +8,25 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { MuscleLoadList } from "@/components/muscle-load/muscle-load-list";
-import { getMuscleExerciseContributions, getMuscleSessionContributions } from "@/lib/domain/training/analysis";
+import { getLatestWeekSessions, getMuscleExerciseContributions, getMuscleSessionContributions } from "@/lib/domain/training/analysis";
 import { getMovementBalance, getTopMuscles, muscleNames } from "@/lib/selectors/training";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
 import { formatDate, formatMuscleName, formatTrainingType } from "@/lib/utils/format";
 import type { MuscleName, TrainingSession } from "@/types/training";
 
 export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession[] }) {
-  const { sessions, syncMessage } = useTrainingSessions(seedSessions);
-  const muscles = getTopMuscles(sessions, 8);
-  const balance = getMovementBalance(sessions);
+  const { sessions, pendingSessions, source, syncMessage } = useTrainingSessions(seedSessions);
+  const { currentWeekKey, currentWeekSessions } = getLatestWeekSessions(sessions);
+  const muscles = getTopMuscles(currentWeekSessions, 8);
+  const balance = getMovementBalance(currentWeekSessions);
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleName>(muscles[0]?.muscle ?? "quadriceps");
   const sessionContributions = useMemo(
-    () => getMuscleSessionContributions(sessions, selectedMuscle).slice(0, 8),
-    [selectedMuscle, sessions],
+    () => getMuscleSessionContributions(currentWeekSessions, selectedMuscle).slice(0, 8),
+    [currentWeekSessions, selectedMuscle],
   );
   const exerciseContributions = useMemo(
-    () => getMuscleExerciseContributions(sessions, selectedMuscle).slice(0, 10),
-    [selectedMuscle, sessions],
+    () => getMuscleExerciseContributions(currentWeekSessions, selectedMuscle).slice(0, 10),
+    [currentWeekSessions, selectedMuscle],
   );
 
   return (
@@ -33,8 +34,14 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
       <PageHeader
         eyebrow="Carga muscular"
         title="Análisis de carga muscular"
-        description="Acumulación semanal, patrones de movimiento y posibles desbalances a vigilar."
+        description={`Acumulación semanal (${currentWeekKey}), patrones de movimiento y posibles desbalances a vigilar.`}
       />
+      <section className="mb-5 flex flex-wrap gap-2">
+        <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
+          {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
+        </Badge>
+        {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
+      </section>
       {syncMessage ? (
         <p className="mb-5 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-3 text-sm text-[var(--muted-strong)]">
           {syncMessage}

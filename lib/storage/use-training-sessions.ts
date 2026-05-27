@@ -18,7 +18,19 @@ import {
 } from "@/lib/storage/training-storage";
 import type { TrainingSession } from "@/types/training";
 
-export type TrainingSessionsSource = "loading" | "remote" | "local-fallback";
+export type TrainingSessionsSource = "loading" | "remote" | "seed-fallback";
+export type TrainingSessionWithSync = TrainingSession & {
+  pendingSync?: boolean;
+  dataSource?: "remote" | "seed" | "local-pending";
+};
+
+function markSessionsSource(sessions: TrainingSession[], dataSource: NonNullable<TrainingSessionWithSync["dataSource"]>) {
+  return sessions.map((session) => ({
+    ...session,
+    dataSource,
+    pendingSync: dataSource === "local-pending",
+  }));
+}
 
 export function useTrainingSessions(seedSessions: TrainingSession[]) {
   const [storedSessions, setStoredSessions] = useState<TrainingSession[]>([]);
@@ -40,14 +52,14 @@ export function useTrainingSessions(seedSessions: TrainingSession[]) {
 
     if (!result.ok) {
       setRemoteSessions(null);
-      setSource("local-fallback");
-      setSyncMessage("Usando datos locales: la base de datos no está disponible.");
+      setSource("seed-fallback");
+      setSyncMessage("Fallback seed: Supabase no está disponible. Las sesiones locales quedan como pendientes.");
       return;
     }
 
     setRemoteSessions(result.sessions);
-    setSource("remote");
-    setSyncMessage(null);
+    setSource(result.sessions.length > 0 ? "remote" : "seed-fallback");
+    setSyncMessage(result.sessions.length > 0 ? null : "Fallback seed: Supabase no tiene entrenamientos todavía.");
 
     if (localSessions.length === 0) {
       return;
@@ -85,10 +97,18 @@ export function useTrainingSessions(seedSessions: TrainingSession[]) {
 
   const sessions = useMemo(() => {
     if (remoteSessions && remoteSessions.length > 0) {
-      return mergeTrainingSessions(remoteSessions, storedSessions, deletedIds);
+      return mergeTrainingSessions(
+        markSessionsSource(remoteSessions, "remote"),
+        markSessionsSource(storedSessions, "local-pending"),
+        deletedIds,
+      );
     }
 
-    return mergeTrainingSessions(seedSessions, storedSessions, deletedIds);
+    return mergeTrainingSessions(
+      markSessionsSource(seedSessions, "seed"),
+      markSessionsSource(storedSessions, "local-pending"),
+      deletedIds,
+    );
   }, [deletedIds, remoteSessions, seedSessions, storedSessions]);
 
   return {
@@ -112,7 +132,7 @@ export function useTrainingSessions(seedSessions: TrainingSession[]) {
         return { ok: true, remote: true };
       } catch {
         setStoredSessions(saveTrainingSession(session));
-        setSource((currentSource) => (currentSource === "remote" ? currentSource : "local-fallback"));
+        setSource((currentSource) => (currentSource === "remote" ? currentSource : "seed-fallback"));
         setSyncMessage("No se pudo guardar en la base de datos. La sesión queda guardada localmente.");
         return { ok: true, remote: false };
       }
