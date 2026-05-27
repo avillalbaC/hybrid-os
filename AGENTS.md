@@ -36,9 +36,11 @@ Before editing, read the relevant docs and understand the existing flow. Do not 
 ## Data source rules
 
 - Supabase is the primary source for real data.
+- The real training history has already been migrated to Supabase.
 - Historical seed is fallback/development only.
 - Do not mix seed data with Supabase data when Supabase already returns real sessions.
 - `localStorage` is only a temporary queue for sessions pending synchronization.
+- Supabase must remain the primary source when it has real training data.
 
 ## Supabase rules
 
@@ -46,7 +48,7 @@ Before editing, read the relevant docs and understand the existing flow. Do not 
 - Service role usage must stay server-side only.
 - Do not expose secrets in components, client hooks, or public files.
 - Do not make destructive SQL changes unless explicitly instructed.
-- Do not use `DROP TABLE`, mass `DELETE`, or destructive migrations unless explicitly instructed.
+- Do not use `DROP`, `TRUNCATE`, mass `DELETE`, or destructive migrations unless explicitly instructed.
 - For schema changes, create incremental migrations.
 
 ## Import flow rules
@@ -64,10 +66,13 @@ Every import must preserve the original raw data. Save:
 - `body_checks`, when present
 - `nutrition_checks`, when present
 
+Do not delete real sessions or replace them with new ids when they represent the same training session.
+
 ## Data model rules
 
 - Do not reduce the model to simple fields.
 - Preserve the full `payload`.
+- Preserve `raw_imports`.
 - Keep historical metrics needed for analysis:
   - running distance
   - duration
@@ -80,17 +85,44 @@ Every import must preserve the original raw data. Save:
 
 ## Current priorities
 
-Prioritize:
-- Training
-- Dashboard
-- Running
-- Training Log
-- Training detail
-- Muscle Load
+v0.2 priority: unify the training data layer.
 
-`/body` and `/nutrition` are not a priority right now. They may remain less polished as long as import data is saved correctly.
+Priority screens:
+- `/`
+- `/dashboard`
+- `/training`
+- `/training/[id]`
+- `/training/weekly`
+- `/training/running`
+- `/muscle-load`
+- `/training/import`
+
+Not priority right now:
+- `/body`
+- `/nutrition`
+- `/goals`
+- PWA
+- Internal AI
+- External integrations
 
 Do not add large features without confirmation.
+
+## Period rules
+
+- Week means calendar week from Monday to Sunday.
+- Month means calendar month.
+- Year means calendar year.
+- All means the full training history.
+- Do not use "last 7 days" as the main Week period.
+
+## Roadmap
+
+- v0.2: single training data source
+- v0.3: Training Log + Training Detail
+- v0.4: advanced Muscle Load
+- v0.5: improved importer
+- v0.6: basic PWA
+- v0.7: offline queue/sync
 
 ## UI direction
 
