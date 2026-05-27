@@ -382,7 +382,7 @@ function normalizeDateRule(value: unknown): DateRule {
   return value === "today_explicit" || value === "yesterday_from_check" || value === "manual" || value === "inferred" ? value : "inferred";
 }
 
-function normalizeTrainingSession(value: unknown): TrainingSession | null {
+function normalizeTrainingSession(value: unknown, fallbackId: string): TrainingSession | null {
   if (!isRecord(value)) return null;
 
   const blocks = Array.isArray(value.blocks)
@@ -393,7 +393,7 @@ function normalizeTrainingSession(value: unknown): TrainingSession | null {
     .filter((subtype): subtype is TrainingSubtype => Boolean(subtype));
   const pendingFields = stringArray(value.pendingFields).map(normalizePendingField);
   const session: TrainingSession = {
-    id: stringValue(value.id, crypto.randomUUID()),
+    id: stringValue(value.id, fallbackId),
     date: stringValue(value.date),
     reportedAt: stringValue(value.reportedAt, stringValue(value.date)),
     dateConfidence: normalizeDateConfidence(value.dateConfidence),
@@ -427,7 +427,7 @@ function normalizeTrainingSession(value: unknown): TrainingSession | null {
 
 function normalizeAppInput(value: unknown, index: number): HybridOSAppInput | null {
   if (!isRecord(value)) return null;
-  const session = normalizeTrainingSession(value.trainingSession);
+  const session = normalizeTrainingSession(value.trainingSession, `historical-session-${index + 1}`);
   if (!session) return null;
 
   return {

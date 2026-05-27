@@ -1,0 +1,435 @@
+{
+  "appInputVersion": "1.0",
+  "generatedBy": "gpt",
+  "generatedAt": "2026-05-27",
+  "trainingSession": {
+    "id": "hyrox-2026-05-26-pairs-workout",
+    "source": "import",
+    "status": "completed",
+    "date": "2026-05-26",
+    "reportedAt": "2026-05-27",
+    "dateConfidence": "exact",
+    "dateRule": "today_explicit",
+    "title": "HYROX Pairs Workout",
+    "type": "hyrox",
+    "subtypes": [
+      "pairs",
+      "engine",
+      "mixed_modal",
+      "lower_body",
+      "core"
+    ],
+    "durationMinutes": 45,
+    "rpe": null,
+    "location": "box",
+    "objective": "Sesión HYROX por parejas con carrera sincronizada, ergómetros, sandbag lunges, kettlebell swings, bike y core.",
+    "rawText": "HYROX Pairs Workout: 2 rondas. 500m run synch, 1000m row, 50m sandbag lunge 20kg, 500m run synch, 1000m ski, 50 KB swing 24kg, 500m run synch, 2000m bike, 50 sit-up. Cap 45'. Se completó una ronda completa y en la segunda ronda se llegó hasta el ski. Todo repartido a la mitad salvo la carrera, que fue sincronizada.",
+    "blocks": [
+      {
+        "id": "block-hyrox-pairs-workout",
+        "name": "Pairs Workout",
+        "format": "for_time",
+        "roundsPlanned": 2,
+        "roundsCompleted": 1,
+        "timeCapMinutes": 45,
+        "restSeconds": null,
+        "exercises": [
+          {
+            "name": "Run",
+            "canonicalName": "run",
+            "sets": 2,
+            "reps": null,
+            "distanceMeters": 500,
+            "durationSeconds": null,
+            "calories": null,
+            "loadKg": null,
+            "movementPattern": "run",
+            "intensity": "moderate",
+            "notes": "Carrera sincronizada. Completada en ronda 1 y ronda 2.",
+            "muscleLoad": [
+              {
+                "muscle": "calves",
+                "role": "primary",
+                "load": 70
+              },
+              {
+                "muscle": "quadriceps",
+                "role": "primary",
+                "load": 60
+              },
+              {
+                "muscle": "hamstrings",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "glutes",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "hipFlexors",
+                "role": "secondary",
+                "load": 40
+              },
+              {
+                "muscle": "core",
+                "role": "stabilizer",
+                "load": 30
+              }
+            ]
+          },
+          {
+            "name": "Row",
+            "canonicalName": "row",
+            "sets": 2,
+            "reps": null,
+            "distanceMeters": 1000,
+            "durationSeconds": null,
+            "calories": null,
+            "loadKg": null,
+            "movementPattern": "pull",
+            "intensity": "moderate",
+            "notes": "Trabajo por parejas repartido a la mitad. Volumen individual estimado: 500 m por ronda completada.",
+            "muscleLoad": [
+              {
+                "muscle": "lats",
+                "role": "primary",
+                "load": 70
+              },
+              {
+                "muscle": "upperBack",
+                "role": "primary",
+                "load": 70
+              },
+              {
+                "muscle": "biceps",
+                "role": "secondary",
+                "load": 40
+              },
+              {
+                "muscle": "forearms",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "core",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "hamstrings",
+                "role": "secondary",
+                "load": 40
+              }
+            ]
+          },
+          {
+            "name": "Sandbag Lunge",
+            "canonicalName": "sandbag_lunge",
+            "sets": 2,
+            "reps": null,
+            "distanceMeters": 50,
+            "durationSeconds": null,
+            "calories": null,
+            "loadKg": 20,
+            "movementPattern": "lunge",
+            "intensity": "moderate",
+            "notes": "Trabajo por parejas repartido a la mitad. Volumen individual estimado: 25 m por ronda completada.",
+            "muscleLoad": [
+              {
+                "muscle": "quadriceps",
+                "role": "primary",
+                "load": 80
+              },
+              {
+                "muscle": "glutes",
+                "role": "primary",
+                "load": 80
+              },
+              {
+                "muscle": "hamstrings",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "adductors",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "core",
+                "role": "secondary",
+                "load": 70
+              },
+              {
+                "muscle": "upperBack",
+                "role": "stabilizer",
+                "load": 40
+              }
+            ]
+          },
+          {
+            "name": "SkiErg",
+            "canonicalName": "skierg",
+            "sets": 2,
+            "reps": null,
+            "distanceMeters": 1000,
+            "durationSeconds": null,
+            "calories": null,
+            "loadKg": null,
+            "movementPattern": "pull",
+            "intensity": "moderate",
+            "notes": "Trabajo por parejas repartido a la mitad. Se completó hasta el ski en la segunda ronda.",
+            "muscleLoad": [
+              {
+                "muscle": "lats",
+                "role": "primary",
+                "load": 80
+              },
+              {
+                "muscle": "upperBack",
+                "role": "primary",
+                "load": 70
+              },
+              {
+                "muscle": "triceps",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "core",
+                "role": "secondary",
+                "load": 60
+              },
+              {
+                "muscle": "hipFlexors",
+                "role": "secondary",
+                "load": 40
+              }
+            ]
+          },
+          {
+            "name": "Kettlebell Swing",
+            "canonicalName": "kettlebell_swing",
+            "sets": 1,
+            "reps": 50,
+            "distanceMeters": null,
+            "durationSeconds": null,
+            "calories": null,
+            "loadKg": 24,
+            "movementPattern": "hinge",
+            "intensity": "moderate",
+            "notes": "Trabajo por parejas repartido a la mitad. Solo completado en la primera ronda.",
+            "muscleLoad": [
+              {
+                "muscle": "glutes",
+                "role": "primary",
+                "load": 80
+              },
+              {
+                "muscle": "hamstrings",
+                "role": "primary",
+                "load": 70
+              },
+              {
+                "muscle": "lowerBack",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "core",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "forearms",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "shoulders",
+                "role": "stabilizer",
+                "load": 30
+              }
+            ]
+          },
+          {
+            "name": "Run",
+            "canonicalName": "run",
+            "sets": 1,
+            "reps": null,
+            "distanceMeters": 500,
+            "durationSeconds": null,
+            "calories": null,
+            "loadKg": null,
+            "movementPattern": "run",
+            "intensity": "moderate",
+            "notes": "Carrera sincronizada. Solo completada en la primera ronda.",
+            "muscleLoad": [
+              {
+                "muscle": "calves",
+                "role": "primary",
+                "load": 70
+              },
+              {
+                "muscle": "quadriceps",
+                "role": "primary",
+                "load": 60
+              },
+              {
+                "muscle": "hamstrings",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "glutes",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "hipFlexors",
+                "role": "secondary",
+                "load": 40
+              },
+              {
+                "muscle": "core",
+                "role": "stabilizer",
+                "load": 30
+              }
+            ]
+          },
+          {
+            "name": "BikeErg",
+            "canonicalName": "bikeerg",
+            "sets": 1,
+            "reps": null,
+            "distanceMeters": 2000,
+            "durationSeconds": null,
+            "calories": null,
+            "loadKg": null,
+            "movementPattern": "mixed",
+            "intensity": "moderate",
+            "notes": "Trabajo por parejas repartido a la mitad. Solo completado en la primera ronda.",
+            "muscleLoad": [
+              {
+                "muscle": "quadriceps",
+                "role": "primary",
+                "load": 70
+              },
+              {
+                "muscle": "glutes",
+                "role": "secondary",
+                "load": 50
+              },
+              {
+                "muscle": "calves",
+                "role": "secondary",
+                "load": 40
+              },
+              {
+                "muscle": "core",
+                "role": "stabilizer",
+                "load": 30
+              }
+            ]
+          },
+          {
+            "name": "Sit Up",
+            "canonicalName": "sit_up",
+            "sets": 1,
+            "reps": 50,
+            "distanceMeters": null,
+            "durationSeconds": null,
+            "calories": null,
+            "loadKg": null,
+            "movementPattern": "core",
+            "intensity": "moderate",
+            "notes": "Trabajo por parejas repartido a la mitad. Solo completado en la primera ronda.",
+            "muscleLoad": [
+              {
+                "muscle": "core",
+                "role": "primary",
+                "load": 80
+              },
+              {
+                "muscle": "hipFlexors",
+                "role": "secondary",
+                "load": 60
+              }
+            ]
+          }
+        ],
+        "blockResult": {
+          "type": "partial",
+          "score": "1 ronda completa + segunda ronda hasta 1000 m SkiErg"
+        },
+        "notes": "Se completó una ronda completa. En la segunda ronda se llegó hasta el ski. Todo el trabajo se repartió a la mitad salvo la carrera, que fue sincronizada."
+      }
+    ],
+    "result": {
+      "type": "partial",
+      "score": "1 ronda completa + segunda ronda hasta 1000 m SkiErg",
+      "capMinutes": 45
+    },
+    "sessionMetrics": {
+      "totalRunMeters": 2500,
+      "totalRowMeters": 2000,
+      "totalSkiMeters": 2000,
+      "totalBikeMeters": 2000,
+      "totalGymnasticsReps": 50,
+      "totalKettlebellReps": 50,
+      "totalBarbellReps": 0,
+      "totalDumbbellReps": 0,
+      "totalExternalLoadKg": null,
+      "totalCalories": null,
+      "hardSetsEstimate": null,
+      "cardioLoad": 80,
+      "strengthLoad": 45,
+      "technicalLoad": 25,
+      "impactScore": 65,
+      "fatigueCost": 75
+    },
+    "sessionMuscleSummary": {
+      "quadriceps": 75,
+      "glutes": 72,
+      "hamstrings": 58,
+      "calves": 65,
+      "core": 70,
+      "hipFlexors": 45,
+      "lats": 45,
+      "upperBack": 45,
+      "forearms": 40,
+      "shoulders": 30,
+      "traps": 35,
+      "lowerBack": 35,
+      "adductors": 38,
+      "biceps": 15,
+      "triceps": 10,
+      "chest": 0
+    },
+    "notes": "HYROX por parejas con carrera sincronizada y trabajo repartido a la mitad en ergómetros, lunges, KB swings, bike y sit-ups.",
+    "feeling": null,
+    "soreness": [],
+    "injuryNotes": null,
+    "tags": [
+      "hyrox",
+      "pairs",
+      "engine",
+      "run",
+      "row",
+      "ski",
+      "bike",
+      "sandbag-lunge",
+      "kb-swing",
+      "sit-up"
+    ],
+    "pendingFields": [
+      "RPE exacto",
+      "Tiempo exacto",
+      "Molestias durante/después"
+    ],
+    "dataQuality": "partial",
+    "importNotes": "Volumen programado por pareja. La carrera fue sincronizada y el resto repartido a la mitad. El score indica una ronda completa y segunda ronda hasta el SkiErg.\nSource original: chatgpt-project-daily-training-log.\nDataQuality original: high_for_structure_partial_for_individual_volume.\nPendingFields originales: RPE exacto | Tiempo exacto si fue antes del cap | Molestias durante/después."
+  }
+}

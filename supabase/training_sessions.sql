@@ -18,14 +18,36 @@ alter table public.training_sessions
   add column if not exists running_distance_meters integer not null default 0,
   add column if not exists duration_minutes integer,
   add column if not exists rpe numeric,
-  add column if not exists session_muscle_summary jsonb not null default '{}'::jsonb;
+  add column if not exists session_muscle_summary jsonb not null default '{}'::jsonb,
+  add column if not exists status text,
+  add column if not exists movement_patterns text[] not null default '{}'::text[],
+  add column if not exists tags text[] not null default '{}'::text[];
 
 update public.training_sessions
 set
   running_distance_meters = coalesce(nullif(payload #>> '{sessionMetrics,totalRunMeters}', '')::integer, 0),
   duration_minutes = nullif(payload ->> 'durationMinutes', '')::integer,
   rpe = nullif(payload ->> 'rpe', '')::numeric,
-  session_muscle_summary = coalesce(payload -> 'sessionMuscleSummary', '{}'::jsonb)
+  session_muscle_summary = coalesce(payload -> 'sessionMuscleSummary', '{}'::jsonb),
+  status = coalesce(payload ->> 'status', status),
+  movement_patterns = coalesce(
+    (
+      select array_agg(distinct exercise ->> 'movementPattern')
+      from jsonb_array_elements(coalesce(payload -> 'blocks', '[]'::jsonb)) as block,
+        jsonb_array_elements(coalesce(block -> 'exercises', '[]'::jsonb)) as exercise
+      where exercise ? 'movementPattern'
+    ),
+    movement_patterns,
+    '{}'::text[]
+  ),
+  tags = coalesce(
+    (
+      select array_agg(tag)
+      from jsonb_array_elements_text(coalesce(payload -> 'tags', '[]'::jsonb)) as tag
+    ),
+    tags,
+    '{}'::text[]
+  )
 where payload is not null;
 
 create index if not exists training_sessions_session_date_idx

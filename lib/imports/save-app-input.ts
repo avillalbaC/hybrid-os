@@ -11,8 +11,57 @@ import type { HybridOSAppInput, SessionStatus, TrainingSession } from "@/types/t
 
 const importableStatuses: SessionStatus[] = ["completed", "partial"];
 
+export type ImportPhase =
+  | "duplicate_check"
+  | "raw_imports"
+  | "training_sessions"
+  | "training_exercises"
+  | "body_checks"
+  | "nutrition_checks";
+
+export type SerializedImportError = {
+  phase: ImportPhase;
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
 function hasProperty<T extends string>(value: unknown, property: T): value is Record<T, unknown> {
   return typeof value === "object" && value !== null && property in value;
+}
+
+function stringProperty(value: unknown, property: string) {
+  if (!hasProperty(value, property)) {
+    return undefined;
+  }
+
+  return typeof value[property] === "string" ? value[property] : undefined;
+}
+
+function serializeImportError(error: unknown, phase: ImportPhase): SerializedImportError {
+  const message =
+    error instanceof Error
+      ? error.message
+      : stringProperty(error, "message") ?? JSON.stringify(error) ?? "Unknown import error.";
+
+  return {
+    phase,
+    message,
+    code: stringProperty(error, "code"),
+    details: stringProperty(error, "details"),
+    hint: stringProperty(error, "hint"),
+  };
+}
+
+async function runImportPhase<T>(phase: ImportPhase, operation: () => Promise<T>) {
+  try {
+    return await operation();
+  } catch (error) {
+    const serializedError = new Error(serializeImportError(error, phase).message);
+    Object.assign(serializedError, serializeImportError(error, phase));
+    throw serializedError;
+  }
 }
 
 export type SaveAppInputsResult = {
@@ -21,7 +70,7 @@ export type SaveAppInputsResult = {
   imported: number;
   skippedDuplicate: string[];
   skippedInvalidStatus: Array<{ id: string; status: SessionStatus }>;
-  errors: Array<{ id: string; message: string }>;
+  errors: Array<{ id: string } & SerializedImportError>;
   importedIds: string[];
   savedExercises: number;
   savedBodyCheckIds: string[];
@@ -92,7 +141,7 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
     }
 
     try {
-      const existingSession = await getRemoteTrainingSessionById(sessionId);
+      const existingSession = await runImportPhase("duplicate_check", () => getRemoteTrainingSessionById(sessionId));
 
       if (existingSession) {
         if (options.duplicateMode === "skip") {
@@ -106,24 +155,31 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
       }
 
       const session = coercePartialSession(input.trainingSession);
+      const savedBodyCheckIds: string[] = [];
+      const savedNutritionCheckIds: string[] = [];
 
-      await insertRawImport(input, session.id);
-      await insertRemoteTrainingSession(session);
-      await insertTrainingExercises(session);
+      await runImportPhase("training_sessions", () => insertRemoteTrainingSession(session));
+      await runImportPhase("training_exercises", () => insertTrainingExercises(session));
+
+      if (input.bodyCheck) {
+        const bodyCheck = input.bodyCheck;
+        await runImportPhase("body_checks", () => upsertBodyCheck(bodyCheck));
+        savedBodyCheckIds.push(bodyCheck.id);
+      }
+
+      if (input.nutritionCheck) {
+        const nutritionCheck = input.nutritionCheck;
+        await runImportPhase("nutrition_checks", () => upsertNutritionCheck(nutritionCheck));
+        savedNutritionCheckIds.push(nutritionCheck.id);
+      }
+
+      await runImportPhase("raw_imports", () => insertRawImport(input, session.id));
 
       result.imported += 1;
       result.importedIds.push(session.id);
       result.savedExercises += exerciseCount(session);
-
-      if (input.bodyCheck) {
-        await upsertBodyCheck(input.bodyCheck);
-        result.savedBodyCheckIds.push(input.bodyCheck.id);
-      }
-
-      if (input.nutritionCheck) {
-        await upsertNutritionCheck(input.nutritionCheck);
-        result.savedNutritionCheckIds.push(input.nutritionCheck.id);
-      }
+      result.savedBodyCheckIds.push(...savedBodyCheckIds);
+      result.savedNutritionCheckIds.push(...savedNutritionCheckIds);
     } catch (error) {
       if (hasProperty(error, "duplicateIds")) {
         throw error;
@@ -131,7 +187,7 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
 
       result.errors.push({
         id: sessionId,
-        message: error instanceof Error ? error.message : "Unknown import error.",
+        ...serializeImportError(error, stringProperty(error, "phase") as ImportPhase | undefined ?? "training_sessions"),
       });
     }
   }

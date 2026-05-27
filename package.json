@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",
-    "import:seed": "tsx scripts/import-seed-to-supabase.ts"
+    "import:seed": "tsx scripts/import-seed-to-supabase.ts",
+    "import:seed:diagnose": "tsx scripts/import-seed-to-supabase.ts --diagnose-only",
+    "session:replace": "tsx scripts/replace-existing-session.ts",
+    "session:replace:diagnose": "tsx scripts/replace-existing-session.ts --diagnose-only",
+    "backfill:sessions": "tsx scripts/backfill-sessions.ts",
+    "backfill:sessions:diagnose": "tsx scripts/backfill-sessions.ts --diagnose-only"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
