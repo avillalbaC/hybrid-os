@@ -1,8 +1,21 @@
 # Hybrid OS - Plan de MVP
 
+## Estado actual tras iteraciones
+
+La app ya no es un MVP puramente local. El flujo principal de entrenamientos usa Supabase/Postgres como fuente persistente mediante API routes server-side:
+
+- `training_sessions` guarda cada `TrainingSession` validada como `payload` JSONB.
+- Las escrituras pasan por `/api/training-sessions` usando `SUPABASE_SERVICE_ROLE_KEY` solo en servidor.
+- `localStorage` queda como fallback temporal y cola simple de sesiones pendientes si Supabase no responde.
+- El importador permite validar, previsualizar, detectar duplicados, importar backups JSON y guardar en Supabase.
+- El log/detalle permiten ver estado de sincronización, exportar backup, editar campos básicos y eliminar sesiones.
+- El dashboard incluye comparación semanal basada en los selectores existentes.
+
+La prioridad técnica actual es mejorar edición/validación y completar vistas analíticas, no decidir persistencia.
+
 ## Estado actual del repositorio
 
-El repositorio esta practicamente vacio. Actualmente solo contiene configuracion de Git y `.gitignore`; no hay `README.md`, `AGENTS.md`, estructura de aplicacion, dependencias instaladas ni codigo existente que preservar.
+Este bloque queda como referencia histórica del plan inicial. El repositorio ya contiene una app Next.js funcional con datos seed, Supabase, rutas API, validación de importaciones, dashboard, training log, detalle, carga muscular, body, nutrition y goals.
 
 Por tanto, este plan asume que el MVP se construira desde cero, manteniendo el enfoque incremental indicado: frontend funcional primero, datos mock/locales, sin backend, sin base de datos, sin autenticacion y sin IA interna.
 

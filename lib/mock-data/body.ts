@@ -1,0 +1,40 @@
+import type { BodyCheck } from "@/types/body";
+
+export const bodyChecks: BodyCheck[] = [
+  {
+    id: "body-2026-05-19",
+    date: "2026-05-19",
+    weightKg: 78.6,
+    waistCm: 83.4,
+    steps: 9400,
+    sleepHours: 7.1,
+    energy: 7,
+    hunger: 5,
+    notes: "Semana estable, buena recuperación.",
+    pendingFields: [],
+  },
+  {
+    id: "body-2026-05-22",
+    date: "2026-05-22",
+    weightKg: 78.2,
+    waistCm: 83.0,
+    steps: 11200,
+    sleepHours: 6.8,
+    energy: 6,
+    hunger: 6,
+    notes: "Más hambre tras sesiones de alta intensidad.",
+    pendingFields: [],
+  },
+  {
+    id: "body-2026-05-25",
+    date: "2026-05-25",
+    weightKg: 78.0,
+    waistCm: 82.7,
+    steps: 8700,
+    sleepHours: 7.6,
+    energy: 8,
+    hunger: 4,
+    notes: "Mejor descanso y menor inflamación.",
+    pendingFields: [],
+  },
+];
