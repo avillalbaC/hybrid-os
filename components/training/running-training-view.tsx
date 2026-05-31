@@ -5,28 +5,123 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { PageHeader } from "@/components/ui/page-header";
-import { getLatestWeekSessions, getRunningDistribution, getRunningSessions, groupRunningSessionsByWeek } from "@/lib/domain/training/analysis";
+import {
+  getCurrentRunningPeriods,
+  getRunningContextTotals,
+  getRunningSessionRows,
+  groupRunningByCalendarWeek,
+  summarizeRunning,
+} from "@/lib/domain/training/running";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
 import { formatDate, formatTrainingType } from "@/lib/utils/format";
 import type { TrainingSession } from "@/types/training";
 
+function formatKm(meters: number) {
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function formatDuration(minutes: number | null) {
+  if (!minutes) {
+    return "Sin dato";
+  }
+
+  const roundedMinutes = Math.round(minutes);
+  const hours = Math.floor(roundedMinutes / 60);
+  const remainingMinutes = roundedMinutes % 60;
+
+  if (hours === 0) {
+    return `${remainingMinutes} min`;
+  }
+
+  return `${hours} h ${String(remainingMinutes).padStart(2, "0")} min`;
+}
+
+function formatPace(secondsPerKm: number | null) {
+  if (!secondsPerKm) {
+    return "Sin dato";
+  }
+
+  const minutes = Math.floor(secondsPerKm / 60);
+  const seconds = secondsPerKm % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}/km`;
+}
+
+function formatDelta(current: number, previous: number, formatter: (value: number) => string) {
+  const delta = current - previous;
+
+  if (delta === 0) {
+    return "igual que semana anterior";
+  }
+
+  const prefix = delta > 0 ? "+" : "-";
+  return `${prefix}${formatter(Math.abs(delta))} vs semana anterior`;
+}
+
+function getDeltaTone(current: number, previous: number) {
+  if (current > previous) {
+    return "positive";
+  }
+
+  if (current < previous) {
+    return "negative";
+  }
+
+  return "neutral";
+}
+
+function ComparisonCard({
+  label,
+  current,
+  previous,
+  formatter,
+}: {
+  label: string;
+  current: number;
+  previous: number;
+  formatter: (value: number) => string;
+}) {
+  return (
+    <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-4">
+      <p className="text-[0.68rem] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">{label}</p>
+      <p className="mt-3 font-mono text-2xl font-black text-[var(--foreground)]">{formatter(current)}</p>
+      <p className="mt-2 text-sm text-[var(--muted)]">{formatDelta(current, previous, formatter)}</p>
+    </div>
+  );
+}
+
+function StatLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
+      <dt className="text-sm text-[var(--muted)]">{label}</dt>
+      <dd className="font-mono text-sm font-black text-[var(--foreground)]">{value}</dd>
+    </div>
+  );
+}
+
+function EmptyState({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="rounded-md border border-dashed border-[var(--line-strong)] bg-[rgba(244,247,244,0.025)] p-6 text-center">
+      <p className="font-semibold text-[var(--foreground)]">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{description}</p>
+    </div>
+  );
+}
+
 export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSession[] }) {
   const { sessions, pendingSessions, source, syncMessage } = useTrainingSessions(seedSessions);
-  const runningSessions = getRunningSessions(sessions);
-  const runningWeeks = groupRunningSessionsByWeek(sessions);
-  const { currentWeekKey, previousWeekKey } = getLatestWeekSessions(sessions);
-  const currentWeekRunning = runningWeeks[currentWeekKey] ?? [];
-  const previousWeekRunning = runningWeeks[previousWeekKey] ?? [];
-  const currentMeters = currentWeekRunning.reduce((total, item) => total + item.runMeters, 0);
-  const previousMeters = previousWeekRunning.reduce((total, item) => total + item.runMeters, 0);
-  const distribution = getRunningDistribution(currentWeekRunning);
+  const runningRows = getRunningSessionRows(sessions);
+  const periods = getCurrentRunningPeriods(runningRows);
+  const historicalStats = summarizeRunning(runningRows);
+  const contextTotals = getRunningContextTotals(runningRows);
+  const weeklySummaries = groupRunningByCalendarWeek(runningRows, 12);
+  const maxWeeklyMeters = Math.max(...weeklySummaries.map((week) => week.runMeters), 1);
 
   return (
     <>
       <PageHeader
         eyebrow="Running"
-        title="Detalle de carrera"
-        description="Running puro, HYROX y sesiones mixtas con metros de carrera acumulados."
+        title="Evolución de carrera"
+        description="Kilómetros, sesiones, duración, ritmo y contexto de carrera con Supabase como fuente principal."
       />
 
       <section className="mb-5 flex flex-wrap gap-2">
@@ -37,57 +132,139 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
       </section>
       {syncMessage ? <p className="mb-5 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-3 text-sm text-[var(--muted-strong)]">{syncMessage}</p> : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Km semana" value={`${(currentMeters / 1000).toFixed(1)} km`} detail={currentWeekKey} tone="strong" />
-        <MetricCard label="Semana anterior" value={`${(previousMeters / 1000).toFixed(1)} km`} detail={previousWeekKey} />
-        <MetricCard label="Sesiones con carrera" value={`${currentWeekRunning.length}`} detail="Semana activa" tone="strong" />
-        <MetricCard label="Total histórico" value={`${(runningSessions.reduce((total, item) => total + item.runMeters, 0) / 1000).toFixed(1)} km`} detail={`${runningSessions.length} sesiones`} />
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <MetricCard
+          label="Km semana actual"
+          value={formatKm(periods.week.runMeters)}
+          detail="Lunes-domingo"
+          delta={formatDelta(periods.week.runMeters, periods.previousWeek.runMeters, formatKm)}
+          deltaTone={getDeltaTone(periods.week.runMeters, periods.previousWeek.runMeters)}
+          tone="strong"
+        />
+        <MetricCard label="Km mes actual" value={formatKm(periods.month.runMeters)} detail="Mes natural" tone="strong" />
+        <MetricCard label="Sesiones running" value={`${historicalStats.sessions}`} detail="Histórico con carrera" />
+        <MetricCard label="Duración running" value={formatDuration(historicalStats.durationMinutes)} detail="Histórico con dato" />
+        <MetricCard label="RPE medio running" value={historicalStats.averageRpe ? `${historicalStats.averageRpe}` : "Sin dato"} detail="Sesiones con RPE" />
       </section>
 
       <section className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px]">
-        <Card>
-          <h3 className="text-lg font-semibold">Sesiones con carrera</h3>
-          <div className="mt-4 divide-y divide-[var(--line)]">
-            {runningSessions.map((item) => (
-              <Link key={item.session.id} href={`/training/${item.session.id}`} className="block py-4 first:pt-0 last:pb-0 transition hover:text-[var(--accent-strong)]">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="font-semibold">{item.session.title}</p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">{formatDate(item.session.date)} · {formatTrainingType(item.session.type)}</p>
-                  </div>
-                  <Badge tone="accent">{(item.runMeters / 1000).toFixed(1)} km</Badge>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </Card>
-
-        <aside className="space-y-5">
+        <div className="space-y-5">
           <Card>
-            <h3 className="text-lg font-semibold">Distribución semanal</h3>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex justify-between gap-3 rounded-md border border-[var(--line)] p-3">
-                <dt>Running puro</dt>
-                <dd className="font-mono font-black">{(distribution.running / 1000).toFixed(1)} km</dd>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Comparación semanal</h3>
+                <p className="mt-1 text-sm text-[var(--muted)]">Semana actual frente a la semana calendario anterior.</p>
               </div>
-              <div className="flex justify-between gap-3 rounded-md border border-[var(--line)] p-3">
-                <dt>HYROX</dt>
-                <dd className="font-mono font-black">{(distribution.hyrox / 1000).toFixed(1)} km</dd>
-              </div>
-              <div className="flex justify-between gap-3 rounded-md border border-[var(--line)] p-3">
-                <dt>Mixto</dt>
-                <dd className="font-mono font-black">{(distribution.mixed / 1000).toFixed(1)} km</dd>
-              </div>
-            </dl>
+              <Badge tone="neutral">lunes-domingo</Badge>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <ComparisonCard label="Km" current={periods.week.runMeters} previous={periods.previousWeek.runMeters} formatter={formatKm} />
+              <ComparisonCard label="Sesiones" current={periods.week.sessions} previous={periods.previousWeek.sessions} formatter={(value) => `${value}`} />
+              <ComparisonCard
+                label="Duración"
+                current={periods.week.durationMinutes}
+                previous={periods.previousWeek.durationMinutes}
+                formatter={(value) => formatDuration(value)}
+              />
+            </div>
           </Card>
 
           <Card>
-            <h3 className="text-lg font-semibold">Tendencia</h3>
-            <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-              {currentMeters >= previousMeters
-                ? `Subida de ${((currentMeters - previousMeters) / 1000).toFixed(1)} km frente a la semana anterior.`
-                : `Bajada de ${((previousMeters - currentMeters) / 1000).toFixed(1)} km frente a la semana anterior.`}
-            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Sesiones running</h3>
+                <p className="mt-1 text-sm text-[var(--muted)]">Carrera pura y metros de carrera dentro de HYROX/CrossFit.</p>
+              </div>
+              <Badge tone="accent">{runningRows.length} sesiones</Badge>
+            </div>
+
+            {runningRows.length === 0 ? (
+              <div className="mt-5">
+                <EmptyState
+                  title="Sin sesiones de running"
+                  description="Cuando haya sesiones con distancia de carrera, aparecerán aquí con ritmo, duración, FC media y RPE."
+                />
+              </div>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                  <thead className="border-b border-[var(--line)] text-[0.68rem] uppercase tracking-[0.18em] text-[var(--muted)]">
+                    <tr>
+                      <th className="py-3 pr-4 font-bold">Fecha</th>
+                      <th className="px-4 py-3 font-bold">Título</th>
+                      <th className="px-4 py-3 font-bold">Distancia</th>
+                      <th className="px-4 py-3 font-bold">Duración</th>
+                      <th className="px-4 py-3 font-bold">Ritmo</th>
+                      <th className="px-4 py-3 font-bold">FC media</th>
+                      <th className="py-3 pl-4 font-bold">RPE</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--line)]">
+                    {runningRows.map((row) => (
+                      <tr key={row.session.id} className="align-top">
+                        <td className="py-4 pr-4 text-[var(--muted-strong)]">{formatDate(row.session.date)}</td>
+                        <td className="px-4 py-4">
+                          <Link href={`/training/${row.session.id}`} className="font-semibold text-[var(--foreground)] transition hover:text-[var(--accent-strong)]">
+                            {row.session.title}
+                          </Link>
+                          <p className="mt-1 text-xs text-[var(--muted)]">{formatTrainingType(row.session.type)}</p>
+                        </td>
+                        <td className="px-4 py-4 font-mono font-black">{formatKm(row.runMeters)}</td>
+                        <td className="px-4 py-4 text-[var(--muted-strong)]">{formatDuration(row.durationMinutes)}</td>
+                        <td className="px-4 py-4 text-[var(--muted-strong)]">{formatPace(row.paceSecondsPerKm)}</td>
+                        <td className="px-4 py-4 text-[var(--muted-strong)]">{row.averageHeartRate ? `${row.averageHeartRate} bpm` : "Sin dato"}</td>
+                        <td className="py-4 pl-4 text-[var(--muted-strong)]">{row.session.rpe ?? "Sin dato"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        <aside className="space-y-5">
+          <Card>
+            <h3 className="text-lg font-semibold">Tipo de carrera</h3>
+            {historicalStats.runMeters === 0 ? (
+              <div className="mt-4">
+                <EmptyState title="Sin distribución" description="La separación se activa cuando existe distancia de carrera en las sesiones." />
+              </div>
+            ) : (
+              <dl className="mt-4 space-y-3">
+                <StatLine label="Running puro" value={formatKm(contextTotals.pure)} />
+                <StatLine label="HYROX/CrossFit" value={formatKm(contextTotals["hyrox-crossfit"])} />
+                <StatLine label="Mixto / otros" value={formatKm(contextTotals.mixed)} />
+              </dl>
+            )}
+          </Card>
+
+          <Card>
+            <h3 className="text-lg font-semibold">Km por semana</h3>
+            {weeklySummaries.length === 0 ? (
+              <div className="mt-4">
+                <EmptyState title="Sin tendencia semanal" description="Aparecerá una barra por cada semana calendario con metros de carrera." />
+              </div>
+            ) : (
+              <div className="mt-5 space-y-4">
+                {weeklySummaries.map((week) => (
+                  <div key={week.weekKey}>
+                    <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                      <span className="font-mono font-black text-[var(--foreground)]">{week.weekKey}</span>
+                      <span className="text-[var(--muted)]">
+                        {formatKm(week.runMeters)} · {week.sessions} sesiones
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-[rgba(244,247,244,0.08)]">
+                      <div
+                        className="h-2 rounded-full bg-[var(--accent)]"
+                        style={{ width: `${Math.max(6, (week.runMeters / maxWeeklyMeters) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </aside>
       </section>

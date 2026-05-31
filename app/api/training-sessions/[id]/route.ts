@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { AUTH_COOKIE_NAME } from "@/lib/auth/fake-auth";
+import { requireAllowedUser } from "@/lib/auth/require-allowed-user";
 import { deleteRemoteTrainingSession, isTrainingSessionsDatabaseConfigured, upsertRemoteTrainingSession } from "@/lib/supabase/training-sessions";
 import { coercePartialSession, validateTrainingSession } from "@/lib/validation/hybrid-os-input";
 
 export const dynamic = "force-dynamic";
 
-function isAuthenticated() {
-  return cookies().get(AUTH_COOKIE_NAME)?.value === "true";
-}
-
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  if (!isAuthenticated()) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAllowedUser();
+
+  if (!auth.ok) {
+    return auth.response;
   }
 
   if (!isTrainingSessionsDatabaseConfigured()) {
@@ -46,8 +43,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 }
 
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
-  if (!isAuthenticated()) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAllowedUser();
+
+  if (!auth.ok) {
+    return auth.response;
   }
 
   if (!isTrainingSessionsDatabaseConfigured()) {
@@ -61,4 +60,3 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     return NextResponse.json({ error: "Could not delete training session." }, { status: 500 });
   }
 }
-

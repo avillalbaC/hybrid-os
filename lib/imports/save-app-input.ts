@@ -3,8 +3,10 @@ import {
   insertRemoteTrainingSession,
   insertRawImport,
   insertTrainingExercises,
+  replaceTrainingExercises,
   upsertBodyCheck,
   upsertNutritionCheck,
+  upsertRemoteTrainingSession,
 } from "@/lib/supabase/training-sessions";
 import { coercePartialSession, validateHistoricalSessions, type ValidationIssue } from "@/lib/validation/hybrid-os-input";
 import type { HybridOSAppInput, SessionStatus, TrainingSession } from "@/types/training";
@@ -40,15 +42,20 @@ function stringProperty(value: unknown, property: string) {
 }
 
 function serializeImportError(error: unknown, phase: ImportPhase): SerializedImportError {
-  const message =
+  const code = stringProperty(error, "code");
+  const rawMessage =
     error instanceof Error
       ? error.message
       : stringProperty(error, "message") ?? JSON.stringify(error) ?? "Unknown import error.";
+  const message =
+    phase === "raw_imports" && code === "23503"
+      ? "No se pudo guardar raw_imports porque la sesión principal no existe. Revisa el orden de inserción o el id usado como FK."
+      : rawMessage;
 
   return {
     phase,
     message,
-    code: stringProperty(error, "code"),
+    code,
     details: stringProperty(error, "details"),
     hint: stringProperty(error, "hint"),
   };
@@ -56,8 +63,12 @@ function serializeImportError(error: unknown, phase: ImportPhase): SerializedImp
 
 async function runImportPhase<T>(phase: ImportPhase, operation: () => Promise<T>) {
   try {
-    return await operation();
+    console.info(`[Hybrid OS import] ${phase}: start`);
+    const result = await operation();
+    console.info(`[Hybrid OS import] ${phase}: ok`);
+    return result;
   } catch (error) {
+    console.error(`[Hybrid OS import] ${phase}: failed`, error);
     const serializedError = new Error(serializeImportError(error, phase).message);
     Object.assign(serializedError, serializeImportError(error, phase));
     throw serializedError;
@@ -79,7 +90,7 @@ export type SaveAppInputsResult = {
 };
 
 export type SaveAppInputsOptions = {
-  duplicateMode?: "error" | "skip";
+  duplicateMode?: "error" | "skip" | "upsert";
   sourceLabel?: string;
 };
 
@@ -110,13 +121,16 @@ function exerciseCount(session: TrainingSession) {
 }
 
 export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOptions = {}): Promise<SaveAppInputsResult> {
+  console.info("[Hybrid OS import] validation: start");
   const validation = validateHistoricalSessions(rawInputs);
 
   if (!validation.ok || !validation.value) {
+    console.error("[Hybrid OS import] validation: failed", validation.errors);
     const error = new Error("Invalid appInput.");
     Object.assign(error, { issues: validation.errors });
     throw error;
   }
+  console.info("[Hybrid OS import] validation: ok");
 
   const result: SaveAppInputsResult = {
     ok: true,
@@ -142,6 +156,7 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
 
     try {
       const existingSession = await runImportPhase("duplicate_check", () => getRemoteTrainingSessionById(sessionId));
+      const shouldUpsertSession = Boolean(existingSession) && options.duplicateMode === "upsert";
 
       if (existingSession) {
         if (options.duplicateMode === "skip") {
@@ -149,17 +164,28 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
           continue;
         }
 
-        const error = new Error("Training session already exists.");
-        Object.assign(error, { duplicateIds: [sessionId] });
-        throw error;
+        if (!shouldUpsertSession) {
+          const error = new Error("Training session already exists.");
+          Object.assign(error, { duplicateIds: [sessionId] });
+          throw error;
+        }
       }
 
       const session = coercePartialSession(input.trainingSession);
       const savedBodyCheckIds: string[] = [];
       const savedNutritionCheckIds: string[] = [];
 
-      await runImportPhase("training_sessions", () => insertRemoteTrainingSession(session));
-      await runImportPhase("training_exercises", () => insertTrainingExercises(session));
+      const persistedSession = await runImportPhase("training_sessions", () =>
+        shouldUpsertSession ? upsertRemoteTrainingSession(session) : insertRemoteTrainingSession(session),
+      );
+      const persistedSessionId = persistedSession.id;
+
+      await runImportPhase("raw_imports", () => insertRawImport(input, persistedSessionId));
+      console.info("[Hybrid OS import] metrics: ok");
+      console.info("[Hybrid OS import] muscle_loads: ok");
+      await runImportPhase("training_exercises", () =>
+        shouldUpsertSession ? replaceTrainingExercises(session) : insertTrainingExercises(session),
+      );
 
       if (input.bodyCheck) {
         const bodyCheck = input.bodyCheck;
@@ -172,8 +198,6 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
         await runImportPhase("nutrition_checks", () => upsertNutritionCheck(nutritionCheck));
         savedNutritionCheckIds.push(nutritionCheck.id);
       }
-
-      await runImportPhase("raw_imports", () => insertRawImport(input, session.id));
 
       result.imported += 1;
       result.importedIds.push(session.id);

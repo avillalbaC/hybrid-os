@@ -1,29 +1,478 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
-import { formatLongDate, formatMuscleName, formatMuscleRole, formatTag, formatTrainingType } from "@/lib/utils/format";
-import type { TrainingSession } from "@/types/training";
+import { useTrainingSessions, type TrainingSessionWithSync } from "@/lib/storage/use-training-sessions";
+import { formatDataQuality, formatLongDate, formatMuscleName, formatMuscleRole, formatTag, formatTrainingType } from "@/lib/utils/format";
+import type { MuscleName, TrainingBlock, TrainingExercise, TrainingResult, TrainingSession } from "@/types/training";
 
-const editablePendingFields: TrainingSession["pendingFields"] = [
-  "RPE exacto",
-  "Duración exacta",
-  "Tiempo exacto",
-  "Resultado exacto",
-  "Reparto individual",
-  "Carga exacta",
-  "Repeticiones exactas",
-  "Distancia exacta",
-  "Molestias durante/después",
-  "Escalado/variantes",
-  "Fecha exacta",
-  "Otro",
-];
+const statusLabels: Record<TrainingSession["status"], string> = {
+  completed: "Completado",
+  partial: "Parcial",
+  planned: "Planificado",
+  cancelled: "Cancelado",
+};
+
+const sourceLabels: Record<TrainingSession["source"], string> = {
+  chatgpt: "ChatGPT",
+  import: "Importación",
+  manual: "Manual",
+};
+
+function formatOptional(value: string | number | boolean | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  return String(value);
+}
+
+function formatSeconds(seconds: number | null | undefined) {
+  if (seconds === null || seconds === undefined) {
+    return null;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return minutes > 0 ? `${minutes}:${String(remainingSeconds).padStart(2, "0")}` : `${remainingSeconds}s`;
+}
+
+function formatResult(result: TrainingResult | null) {
+  if (!result) {
+    return "-";
+  }
+
+  return [result.score, result.timeSeconds ? formatSeconds(result.timeSeconds) : null, result.capMinutes ? `cap ${result.capMinutes} min` : null, result.notes]
+    .filter(Boolean)
+    .join(" · ") || result.type;
+}
+
+function formatMeters(meters: number | null | undefined) {
+  if (!meters) {
+    return null;
+  }
+
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${meters} m`;
+}
+
+function formatMinutes(minutes: number | null | undefined) {
+  return minutes === null || minutes === undefined ? "-" : `${minutes} min`;
+}
+
+function formatUnit(value: string | number | boolean | null | undefined, unit: string) {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  return `${value} ${unit}`;
+}
+
+function getTopMuscles(session: TrainingSession, limit = 3) {
+  return (Object.entries(session.sessionMuscleSummary) as Array<[MuscleName, number]>)
+    .filter(([, load]) => load > 0)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, limit);
+}
+
+function getExerciseTopMuscles(exercise: TrainingExercise, limit = 3) {
+  return [...exercise.muscleLoad]
+    .filter((entry) => entry.load > 0)
+    .sort((a, b) => b.load - a.load)
+    .slice(0, limit);
+}
+
+function SummaryStat({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "neutral" | "accent" | "warning";
+}) {
+  const toneClasses = {
+    neutral: "border-[var(--line)] bg-[rgba(244,247,244,0.035)]",
+    accent: "border-[rgba(56,217,159,0.32)] bg-[var(--accent-soft)]",
+    warning: "border-[rgba(240,196,107,0.34)] bg-[var(--warning-soft)]",
+  };
+
+  return (
+    <div className={`rounded-md border p-4 ${toneClasses[tone]}`}>
+      <p className="text-[0.66rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">{label}</p>
+      <p className="mt-2 text-lg font-black leading-tight text-[var(--foreground)]">{value}</p>
+    </div>
+  );
+}
+
+function CompactField({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div>
+      <dt className="text-[0.66rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">{label}</dt>
+      <dd className="mt-1 text-sm font-semibold leading-5 text-[var(--foreground)]">{value}</dd>
+    </div>
+  );
+}
+
+function SectionTitle({
+  eyebrow,
+  title,
+  id,
+}: {
+  eyebrow?: string;
+  title: string;
+  id?: string;
+}) {
+  return (
+    <div id={id} className="scroll-mt-24">
+      {eyebrow ? <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-[var(--accent)]">{eyebrow}</p> : null}
+      <h2 className="mt-1 text-xl font-black tracking-[-0.01em] text-[var(--foreground)]">{title}</h2>
+    </div>
+  );
+}
+
+function ExecutiveSummary({
+  session,
+  topMuscles,
+}: {
+  session: TrainingSession;
+  topMuscles: Array<[MuscleName, number]>;
+}) {
+  const dominantLoad = topMuscles.length > 0
+    ? topMuscles.map(([muscle]) => formatMuscleName(muscle).toLowerCase()).join(", ")
+    : "sin carga muscular registrada";
+  const resultText = formatResult(session.result);
+  const summaryParts = [
+    formatTrainingType(session.type),
+    formatMinutes(session.durationMinutes),
+    `RPE ${session.rpe ?? "-"}`,
+    resultText !== "-" ? resultText : null,
+    `carga dominante: ${dominantLoad}`,
+  ].filter(Boolean);
+
+  return (
+    <section className="mb-5 rounded-md border border-[rgba(56,217,159,0.22)] bg-[linear-gradient(135deg,rgba(56,217,159,0.12),rgba(244,247,244,0.035)_42%,rgba(240,196,107,0.08))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.34)]">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-4xl">
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[var(--accent-strong)]">Lectura rápida</p>
+          <p className="mt-3 text-2xl font-black leading-tight text-[var(--foreground)] md:text-3xl">
+            {summaryParts.join(" · ")}.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge tone="accent">{formatTrainingType(session.type)}</Badge>
+            {session.subtypes.map((subtype) => (
+              <Badge key={subtype}>{formatTag(subtype)}</Badge>
+            ))}
+            <Badge>{statusLabels[session.status]}</Badge>
+            <Badge>{formatDataQuality(session.dataQuality)}</Badge>
+            <Badge>{sourceLabels[session.source]}</Badge>
+          </div>
+        </div>
+        <div className="grid min-w-0 grid-cols-2 gap-3 sm:min-w-[360px]">
+          <SummaryStat label="Fecha" value={formatLongDate(session.date)} />
+          <SummaryStat label="Tipo" value={formatTrainingType(session.type)} />
+          <SummaryStat label="Duración" value={formatMinutes(session.durationMinutes)} tone="accent" />
+          <SummaryStat label="RPE" value={`${session.rpe ?? "-"}/10`} tone={session.rpe && session.rpe >= 8 ? "warning" : "neutral"} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ResultCard({
+  session,
+}: {
+  session: TrainingSession;
+}) {
+  const result = session.result;
+  const runMeters = formatMeters(session.sessionMetrics.totalRunMeters);
+
+  return (
+    <Card className="border-[rgba(56,217,159,0.24)]">
+      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[var(--accent)]">Resultado principal</p>
+          <p className="mt-2 text-3xl font-black leading-none text-[var(--foreground)] md:text-4xl">
+            {result?.score ?? "-"}
+          </p>
+          <p className="mt-3 text-sm font-semibold text-[var(--muted-strong)]">{formatResult(result)}</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3 md:min-w-[420px]">
+          <SummaryStat label="Estado" value={statusLabels[session.status]} tone={session.status === "completed" ? "accent" : "warning"} />
+          <SummaryStat label="Cap" value={result?.capMinutes ? `${result.capMinutes} min` : "-"} />
+          <SummaryStat label="Running" value={runMeters ?? "-"} />
+        </div>
+      </div>
+      {result?.completedAsPlanned !== undefined && result.completedAsPlanned !== null ? (
+        <p className="mt-4 text-sm font-semibold text-[var(--muted)]">
+          {result.completedAsPlanned ? "Completado según lo planificado." : "Resultado parcial o con ajuste respecto al plan."}
+        </p>
+      ) : null}
+    </Card>
+  );
+}
+
+function MetadataSection({
+  session,
+  ergMetrics,
+}: {
+  session: TrainingSession;
+  ergMetrics: Array<{ label: string; meters: number; detail: string }>;
+}) {
+  return (
+    <Card>
+      <div className="grid gap-6 xl:grid-cols-3">
+        <div>
+          <SectionTitle title="Datos principales" />
+          <dl className="mt-4 grid gap-4">
+            <CompactField label="Título" value={session.title} />
+            <CompactField label="Fecha" value={formatLongDate(session.date)} />
+            <CompactField label="Ubicación" value={formatOptional(session.location)} />
+            <CompactField label="Subtipos" value={session.subtypes.length > 0 ? session.subtypes.map(formatTag).join(", ") : "-"} />
+          </dl>
+        </div>
+        <div>
+          <SectionTitle title="Calidad y notas" />
+          <dl className="mt-4 grid gap-4">
+            <CompactField label="Data quality" value={formatDataQuality(session.dataQuality)} />
+            <CompactField label="Source" value={sourceLabels[session.source]} />
+            <CompactField label="Pending fields" value={session.pendingFields.length > 0 ? session.pendingFields.join(", ") : "Sin campos pendientes"} />
+            <CompactField label="Feeling" value={formatOptional(session.feeling)} />
+            <CompactField label="Soreness" value={session.soreness.length > 0 ? session.soreness.join(", ") : "-"} />
+            <CompactField label="Injury notes" value={formatOptional(session.injuryNotes)} />
+          </dl>
+        </div>
+        <div>
+          <SectionTitle title="Métricas secundarias" />
+          <dl className="mt-4 grid gap-4">
+            <CompactField label="Fecha reportada" value={formatOptional(session.reportedAt)} />
+            <CompactField label="Date confidence" value={formatOptional(session.dateConfidence)} />
+            <CompactField label="Date rule" value={formatOptional(session.dateRule)} />
+            <CompactField label="Calorías" value={formatOptional(session.sessionMetrics.totalCalories)} />
+            <CompactField label="Carga externa" value={formatUnit(session.sessionMetrics.totalExternalLoadKg, "kg")} />
+            {ergMetrics.map((metric) => (
+              <CompactField key={metric.label} label={metric.label} value={formatMeters(metric.meters) ?? "-"} />
+            ))}
+          </dl>
+        </div>
+      </div>
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-4">
+          <p className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Notas</p>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--muted-strong)]">{session.notes || "Sin notas registradas."}</p>
+        </div>
+        <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-4">
+          <p className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[var(--accent)]">Import notes</p>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--muted-strong)]">{session.importNotes || "Sin notas de importación."}</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function ExerciseMuscleLoad({ exercise }: { exercise: TrainingExercise }) {
+  const topMuscles = getExerciseTopMuscles(exercise);
+
+  if (exercise.muscleLoad.length === 0) {
+    return <p className="mt-3 text-sm text-[var(--muted)]">Sin muscleLoad por ejercicio.</p>;
+  }
+
+  return (
+    <details className="mt-3 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.02)] p-3">
+      <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.12em] text-[var(--accent)]">
+        Ver carga muscular del ejercicio
+        {topMuscles.length > 0 ? ` · ${topMuscles.map((entry) => `${formatMuscleName(entry.muscle)} ${entry.load}`).join(" · ")}` : null}
+      </summary>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {exercise.muscleLoad.map((entry) => (
+          <Badge key={`${exercise.name}-${entry.muscle}-${entry.role}`}>
+            {formatMuscleName(entry.muscle)} · {formatMuscleRole(entry.role)} · {entry.load}
+          </Badge>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function getExerciseMetrics(exercise: TrainingExercise) {
+  return [
+    exercise.sets !== undefined ? `${formatOptional(exercise.sets)} sets` : null,
+    exercise.reps !== undefined ? `${formatOptional(exercise.reps)} reps` : null,
+    exercise.loadKg !== undefined ? formatUnit(exercise.loadKg, "kg") : null,
+    exercise.distanceMeters !== undefined ? formatUnit(exercise.distanceMeters, "m") : null,
+    exercise.durationSeconds !== undefined ? formatSeconds(exercise.durationSeconds) : null,
+    exercise.calories !== undefined ? formatUnit(exercise.calories, "cal") : null,
+  ].filter(Boolean);
+}
+
+function ExerciseCard({ exercise }: { exercise: TrainingExercise }) {
+  const metrics = getExerciseMetrics(exercise);
+
+  return (
+    <article className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.024)] p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <h4 className="text-base font-black text-[var(--foreground)]">{exercise.name}</h4>
+          <p className="mt-1 font-mono text-xs text-[var(--muted)]">{exercise.canonicalName}</p>
+          {metrics.length > 0 ? (
+            <p className="mt-3 text-sm font-semibold leading-6 text-[var(--muted-strong)]">{metrics.join(" · ")}</p>
+          ) : (
+            <p className="mt-3 text-sm text-[var(--muted)]">Sin métricas detalladas registradas.</p>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Badge>{formatTag(exercise.movementPattern)}</Badge>
+          {exercise.intensity ? <Badge tone={exercise.intensity === "max" || exercise.intensity === "high" ? "warning" : "accent"}>{exercise.intensity}</Badge> : null}
+        </div>
+      </div>
+      {exercise.notes ? <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{exercise.notes}</p> : null}
+      <ExerciseMuscleLoad exercise={exercise} />
+    </article>
+  );
+}
+
+function BlockCard({ block, index }: { block: TrainingBlock; index: number }) {
+  const blockFacts = [
+    block.roundsPlanned !== undefined ? `plan ${formatOptional(block.roundsPlanned)} rondas` : null,
+    block.roundsCompleted !== undefined ? `hechas ${formatOptional(block.roundsCompleted)}` : null,
+    block.timeCapMinutes !== undefined ? `cap ${formatUnit(block.timeCapMinutes, "min")}` : null,
+    block.restSeconds !== undefined ? `rest ${formatUnit(block.restSeconds, "s")}` : null,
+  ].filter(Boolean);
+
+  return (
+    <article className="rounded-md border border-[var(--line)] bg-[linear-gradient(180deg,var(--panel-strong),var(--panel))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)]">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-[0.66rem] font-black uppercase tracking-[0.14em] text-[var(--muted)]">Bloque {index + 1}</p>
+          <h3 className="mt-1 text-xl font-black text-[var(--foreground)]">{block.name}</h3>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge tone="accent">{formatTag(block.format)}</Badge>
+            {block.blockResult ? <Badge tone="warning">{block.blockResult}</Badge> : null}
+          </div>
+        </div>
+        {blockFacts.length > 0 ? (
+          <p className="max-w-xl text-sm font-semibold leading-6 text-[var(--muted-strong)] md:text-right">{blockFacts.join(" · ")}</p>
+        ) : null}
+      </div>
+
+      {block.notes ? <p className="mt-4 text-sm leading-6 text-[var(--muted)]">{block.notes}</p> : null}
+
+      <div className="mt-5 grid gap-3">
+        {block.exercises.length > 0 ? block.exercises.map((exercise, exerciseIndex) => (
+          <ExerciseCard key={`${block.id}-${exercise.name}-${exerciseIndex}`} exercise={exercise} />
+        )) : (
+          <div className="rounded-md border border-[rgba(240,196,107,0.28)] bg-[var(--warning-soft)] p-4">
+            <p className="text-sm font-semibold text-[var(--warning)]">Este bloque no tiene ejercicios detallados.</p>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function MuscleRanking({ session }: { session: TrainingSession }) {
+  const muscles = (Object.entries(session.sessionMuscleSummary) as Array<[MuscleName, number]>)
+    .filter(([, load]) => load > 0)
+    .sort(([, a], [, b]) => b - a);
+  const maxLoad = muscles[0]?.[1] ?? 0;
+  const warningMuscles = muscles.filter(([, load]) => load >= 80).slice(0, 3);
+
+  return (
+    <Card>
+      <h3 className="text-lg font-black">Carga muscular</h3>
+      <p className="mt-1 text-sm text-[var(--muted)]">Máximo de sesión: {maxLoad > 0 ? `${maxLoad} puntos` : "-"}</p>
+      {warningMuscles.length > 0 ? (
+        <p className="mt-3 rounded-md border border-[rgba(240,196,107,0.28)] bg-[var(--warning-soft)] p-3 text-sm font-semibold leading-5 text-[var(--warning)]">
+          Alta carga en {warningMuscles.map(([muscle]) => formatMuscleName(muscle).toLowerCase()).join(", ")}.
+        </p>
+      ) : null}
+      <div className="mt-4 space-y-3">
+        {muscles.length > 0 ? muscles.slice(0, 8).map(([muscle, load]) => (
+          <div key={muscle} className="grid gap-2">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="font-semibold text-[var(--foreground)]">{formatMuscleName(muscle)}</span>
+              <span className="text-xs font-bold text-[var(--muted-strong)]">{load}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-[rgba(244,247,244,0.08)]" aria-hidden="true">
+              <div
+                className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--warning))]"
+                style={{ width: `${Math.max(8, (load / maxLoad) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )) : <p className="text-sm text-[var(--muted)]">Sin carga muscular registrada.</p>}
+      </div>
+    </Card>
+  );
+}
+
+function Sidebar({
+  session,
+  previousSession,
+  nextSession,
+}: {
+  session: TrainingSession;
+  previousSession?: TrainingSessionWithSync;
+  nextSession?: TrainingSessionWithSync;
+}) {
+  return (
+    <aside className="space-y-5 lg:sticky lg:top-6 lg:self-start">
+      <Card>
+        <h3 className="text-lg font-black">Navegación</h3>
+        <nav className="mt-4 grid gap-2 text-sm font-semibold text-[var(--muted-strong)]">
+          <a href="#resultado" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[rgba(56,217,159,0.34)] hover:text-[var(--foreground)]">Resultado</a>
+          <a href="#datos" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[rgba(56,217,159,0.34)] hover:text-[var(--foreground)]">Datos y calidad</a>
+          <a href="#bloques" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[rgba(56,217,159,0.34)] hover:text-[var(--foreground)]">Bloques</a>
+          <a href="#debug" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[rgba(56,217,159,0.34)] hover:text-[var(--foreground)]">Payload/debug</a>
+        </nav>
+        <div className="mt-4 grid gap-3">
+          {nextSession ? (
+            <Link href={`/training/${nextSession.id}`} className="rounded-md border border-[var(--line)] p-3 text-sm font-semibold transition hover:border-[rgba(56,217,159,0.34)]">
+              <span className="block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">Sesión siguiente</span>
+              <span className="mt-1 block">{nextSession.title}</span>
+            </Link>
+          ) : <p className="text-sm text-[var(--muted)]">No hay sesión más reciente.</p>}
+          {previousSession ? (
+            <Link href={`/training/${previousSession.id}`} className="rounded-md border border-[var(--line)] p-3 text-sm font-semibold transition hover:border-[rgba(56,217,159,0.34)]">
+              <span className="block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">Sesión anterior</span>
+              <span className="mt-1 block">{previousSession.title}</span>
+            </Link>
+          ) : <p className="text-sm text-[var(--muted)]">No hay sesión más antigua.</p>}
+        </div>
+      </Card>
+
+      <MuscleRanking session={session} />
+
+      <Card>
+        <h3 className="text-lg font-black">Tags</h3>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {session.tags.map((tag) => (
+            <Badge key={tag}>{formatTag(tag)}</Badge>
+          ))}
+          {session.tags.length === 0 ? <p className="text-sm text-[var(--muted)]">Sin tags.</p> : null}
+        </div>
+      </Card>
+
+      <Card>
+        <details id="debug" className="scroll-mt-24">
+          <summary className="cursor-pointer text-sm font-bold text-[var(--accent)]">Payload JSON completo</summary>
+          <pre className="mt-4 max-h-[420px] overflow-auto rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-4 text-xs leading-5 text-[#d9f2e9]">
+            {JSON.stringify(session, null, 2)}
+          </pre>
+        </details>
+      </Card>
+    </aside>
+  );
+}
 
 export function TrainingDetailView({
   sessionId,
@@ -33,35 +482,15 @@ export function TrainingDetailView({
   seedSessions: TrainingSession[];
 }) {
   const router = useRouter();
-  const { sessions, pendingSessions, source, hasHydrated, saveSession, deleteSession, syncMessage } = useTrainingSessions(seedSessions);
-  const session = sessions.find((item) => item.id === sessionId);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editMessage, setEditMessage] = useState<string | null>(null);
-  const [formState, setFormState] = useState({
-    date: "",
-    title: "",
-    durationMinutes: "",
-    rpe: "",
-    feeling: "",
-    notes: "",
-    soreness: "",
-    pendingFields: "",
-  });
-
-  useEffect(() => {
-    if (!session) return;
-
-    setFormState({
-      date: session.date,
-      title: session.title,
-      durationMinutes: session.durationMinutes?.toString() ?? "",
-      rpe: session.rpe?.toString() ?? "",
-      feeling: session.feeling ?? "",
-      notes: session.notes ?? "",
-      soreness: session.soreness.join(", "),
-      pendingFields: session.pendingFields.join(", "),
-    });
-  }, [session]);
+  const { sessions, pendingSessions, source, hasHydrated, deleteSession, syncMessage, remoteError } = useTrainingSessions(seedSessions);
+  const sortedSessions = useMemo(
+    () => ([...sessions] as TrainingSessionWithSync[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [sessions],
+  );
+  const sessionIndex = sortedSessions.findIndex((item) => item.id === sessionId);
+  const session = sessionIndex >= 0 ? sortedSessions[sessionIndex] : undefined;
+  const previousSession = sessionIndex >= 0 ? sortedSessions[sessionIndex + 1] : undefined;
+  const nextSession = sessionIndex > 0 ? sortedSessions[sessionIndex - 1] : undefined;
 
   if (!session) {
     return (
@@ -69,11 +498,17 @@ export function TrainingDetailView({
         <PageHeader
           eyebrow="Detalle de entrenamiento"
           title={hasHydrated ? "Entrenamiento no encontrado" : "Cargando entrenamiento"}
-          description={hasHydrated ? "No existe una sesión con este identificador en el seed ni en el storage local." : undefined}
+          description={hasHydrated ? "No existe una sesión con este identificador en Supabase, pendientes locales ni fallback seed." : undefined}
         />
+        {remoteError ? (
+          <Card className="mb-5 border-[rgba(240,196,107,0.32)]">
+            <p className="text-sm font-semibold text-[var(--warning)]">No se pudo cargar Supabase.</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{syncMessage ?? remoteError}</p>
+          </Card>
+        ) : null}
         {hasHydrated ? (
           <Link href="/training" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
-            Volver al log
+            Volver al Training Log
           </Link>
         ) : null}
       </>
@@ -81,6 +516,12 @@ export function TrainingDetailView({
   }
 
   const activeSession = session;
+  const topMuscles = getTopMuscles(activeSession);
+  const ergMetrics = [
+    { label: "Row", meters: activeSession.sessionMetrics.totalRowMeters, detail: "Remo registrado" },
+    { label: "Ski", meters: activeSession.sessionMetrics.totalSkiMeters, detail: "SkiErg registrado" },
+    { label: "Bike", meters: activeSession.sessionMetrics.totalBikeMeters, detail: "Bike registrada" },
+  ].filter((metric) => metric.meters > 0);
 
   async function handleDelete() {
     if (!window.confirm(`¿Eliminar "${activeSession.title}"?`)) {
@@ -91,237 +532,71 @@ export function TrainingDetailView({
     router.push("/training");
   }
 
-  async function handleSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const durationMinutes = formState.durationMinutes.trim() === "" ? null : Number(formState.durationMinutes);
-    const rpe = formState.rpe.trim() === "" ? null : Number(formState.rpe);
-
-    if (durationMinutes !== null && (!Number.isFinite(durationMinutes) || durationMinutes < 0)) {
-      setEditMessage("La duración debe ser un número positivo o quedar vacía.");
-      return;
-    }
-
-    if (rpe !== null && (!Number.isFinite(rpe) || rpe < 0 || rpe > 10)) {
-      setEditMessage("El RPE debe estar entre 0 y 10 o quedar vacío.");
-      return;
-    }
-
-    if (!formState.date || !formState.title.trim()) {
-      setEditMessage("Fecha y título son obligatorios.");
-      return;
-    }
-
-    const pendingFields = formState.pendingFields
-      .split(",")
-      .map((item) => item.trim())
-      .filter((item): item is TrainingSession["pendingFields"][number] => editablePendingFields.includes(item as TrainingSession["pendingFields"][number]));
-
-    const nextSession: TrainingSession = {
-      ...activeSession,
-      date: formState.date,
-      title: formState.title.trim(),
-      durationMinutes,
-      rpe,
-      feeling: formState.feeling.trim() || null,
-      notes: formState.notes.trim() || null,
-      soreness: formState.soreness.split(",").map((item) => item.trim()).filter(Boolean),
-      pendingFields,
-    };
-
-    const result = await saveSession(nextSession);
-    setEditMessage(result.remote ? "Cambios guardados en Supabase." : "Cambios guardados localmente hasta sincronizar.");
-    setIsEditing(false);
-  }
-
   return (
     <>
       <PageHeader
-        eyebrow={formatLongDate(session.date)}
-        title={session.title}
-        description={session.objective ?? undefined}
+        eyebrow={formatLongDate(activeSession.date)}
+        title={activeSession.title}
+        description={activeSession.objective ?? undefined}
+        action={
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link
+              href="/training"
+              className="inline-flex rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
+            >
+              Volver al Training Log
+            </Link>
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="inline-flex rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--muted-strong)] transition hover:border-[rgba(240,196,107,0.5)] hover:text-[var(--warning)]"
+            >
+              Eliminar
+            </button>
+          </div>
+        }
       />
 
+      <ExecutiveSummary session={activeSession} topMuscles={topMuscles} />
+
       <section className="mb-5 flex flex-wrap gap-2">
-        <Badge tone="accent">{formatTrainingType(session.type)}</Badge>
-        {session.subtypes.map((subtype) => (
-          <Badge key={subtype}>{formatTag(subtype)}</Badge>
-        ))}
-        <Badge>RPE {session.rpe ?? "-"}/10</Badge>
-        <Badge>{session.durationMinutes ?? "-"} min</Badge>
         <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
           {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
         </Badge>
+        {activeSession.pendingSync ? <Badge tone="warning">pendingSync</Badge> : null}
         {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
-        {syncMessage ? <Badge tone="warning">{syncMessage}</Badge> : null}
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-        <div className="space-y-5">
-          {session.blocks.map((block) => (
-            <Card key={block.id}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">{block.name}</h3>
-                  <p className="text-sm text-[var(--muted)]">{block.format}</p>
-                </div>
-                {block.timeCapMinutes ? <Badge tone="warning">Cap {block.timeCapMinutes} min</Badge> : null}
-              </div>
-              <div className="mt-4 divide-y divide-[var(--line)]">
-                {block.exercises.map((exercise) => (
-                  <div key={exercise.name} className="py-4 first:pt-0 last:pb-0">
-                    <p className="font-semibold">{exercise.name}</p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
-                      {[
-                        exercise.sets ? `${exercise.sets} series` : null,
-                        exercise.reps ? `${exercise.reps} reps` : null,
-                        exercise.loadKg ? `${exercise.loadKg} kg` : null,
-                        exercise.distanceMeters ? `${exercise.distanceMeters} m` : null,
-                        exercise.durationSeconds ? `${exercise.durationSeconds}s` : null,
-                        exercise.calories ? `${exercise.calories} cal` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
+      {syncMessage && source !== "remote" ? (
+        <p className="mb-5 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-3 text-sm text-[var(--muted-strong)]">
+          {syncMessage}
+        </p>
+      ) : null}
 
-        <aside className="space-y-5">
-          <Card>
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-lg font-semibold">Resumen</h3>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing((value) => !value)}
-                  className="rounded-md border border-[var(--line)] px-3 py-1.5 text-xs font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
-                >
-                  {isEditing ? "Cerrar" : "Editar"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="rounded-md border border-[var(--line)] px-3 py-1.5 text-xs font-bold text-[var(--muted-strong)] transition hover:border-[rgba(240,196,107,0.5)] hover:text-[var(--warning)]"
-                >
-                  Eliminar
-                </button>
-              </div>
-            </div>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)]">Sensación</dt>
-                <dd className="font-semibold">{session.feeling ?? "-"}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)]">Ubicación</dt>
-                <dd className="font-semibold">{session.location ?? "-"}</dd>
-              </div>
-            </dl>
-            {session.notes ? <p className="mt-4 text-sm leading-6 text-[var(--muted)]">{session.notes}</p> : null}
-            {editMessage ? <p className="mt-4 text-sm font-semibold text-[var(--accent)]">{editMessage}</p> : null}
-          </Card>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="space-y-5">
+          <div id="resultado" className="scroll-mt-24">
+            <ResultCard session={activeSession} />
+          </div>
 
-          {isEditing ? (
-            <Card>
-              <h3 className="text-lg font-semibold">Edición rápida</h3>
-              <form className="mt-4 space-y-3" onSubmit={handleSave}>
-                <label className="block text-sm font-semibold">
-                  Fecha
-                  <input
-                    type="date"
-                    value={formState.date}
-                    onChange={(event) => setFormState((state) => ({ ...state, date: event.target.value }))}
-                    className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="block text-sm font-semibold">
-                  Título
-                  <input
-                    value={formState.title}
-                    onChange={(event) => setFormState((state) => ({ ...state, title: event.target.value }))}
-                    className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm"
-                  />
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block text-sm font-semibold">
-                    Duración
-                    <input
-                      inputMode="numeric"
-                      value={formState.durationMinutes}
-                      onChange={(event) => setFormState((state) => ({ ...state, durationMinutes: event.target.value }))}
-                      className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm"
-                    />
-                  </label>
-                  <label className="block text-sm font-semibold">
-                    RPE
-                    <input
-                      inputMode="decimal"
-                      value={formState.rpe}
-                      onChange={(event) => setFormState((state) => ({ ...state, rpe: event.target.value }))}
-                      className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm"
-                    />
-                  </label>
-                </div>
-                <label className="block text-sm font-semibold">
-                  Feeling
-                  <input
-                    value={formState.feeling}
-                    onChange={(event) => setFormState((state) => ({ ...state, feeling: event.target.value }))}
-                    className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="block text-sm font-semibold">
-                  Soreness
-                  <input
-                    value={formState.soreness}
-                    onChange={(event) => setFormState((state) => ({ ...state, soreness: event.target.value }))}
-                    className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="block text-sm font-semibold">
-                  Pending fields
-                  <input
-                    value={formState.pendingFields}
-                    onChange={(event) => setFormState((state) => ({ ...state, pendingFields: event.target.value }))}
-                    className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="block text-sm font-semibold">
-                  Notas
-                  <textarea
-                    value={formState.notes}
-                    onChange={(event) => setFormState((state) => ({ ...state, notes: event.target.value }))}
-                    className="mt-2 min-h-24 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  className="w-full rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[#06100c] transition hover:bg-[var(--accent-strong)]"
-                >
-                  Guardar cambios
-                </button>
-              </form>
-            </Card>
-          ) : null}
+          <div id="datos" className="scroll-mt-24">
+            <MetadataSection session={activeSession} ergMetrics={ergMetrics} />
+          </div>
 
-          <Card>
-            <h3 className="text-lg font-semibold">Carga muscular</h3>
-            <div className="mt-4 space-y-3">
-              {Object.entries(session.sessionMuscleSummary)
-                .filter(([, load]) => load > 0)
-                .map(([muscle, load]) => (
-                  <div key={muscle} className="flex items-center justify-between gap-3 text-sm">
-                    <span>{formatMuscleName(muscle)}</span>
-                    <Badge>{load} puntos · {formatMuscleRole("primary")}</Badge>
-                  </div>
-                ))}
-            </div>
-          </Card>
-        </aside>
+          <div id="bloques" className="space-y-4 scroll-mt-24">
+            <SectionTitle eyebrow={`${activeSession.blocks.length} bloques`} title="Bloques y ejercicios" />
+            {activeSession.blocks.length > 0 ? activeSession.blocks.map((block, index) => (
+              <BlockCard key={block.id} block={block} index={index} />
+            )) : (
+              <Card>
+                <h3 className="text-lg font-black">Bloques</h3>
+                <p className="mt-2 text-sm text-[var(--muted)]">Esta sesión no tiene bloques detallados en el payload.</p>
+              </Card>
+            )}
+          </div>
+        </main>
+
+        <Sidebar session={activeSession} previousSession={previousSession} nextSession={nextSession} />
       </div>
     </>
   );

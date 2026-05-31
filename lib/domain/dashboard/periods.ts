@@ -26,39 +26,39 @@ function endOfDay(date: Date) {
   return next;
 }
 
-function addDays(date: Date, days: number) {
+export function addDays(date: Date, days: number) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
 }
 
-function startOfWeek(date: Date) {
+export function startOfWeek(date: Date) {
   const start = parseDashboardDate(date);
   const day = start.getDay() || 7;
   start.setDate(start.getDate() - (day - 1));
   return start;
 }
 
-function endOfWeek(date: Date) {
+export function endOfWeek(date: Date) {
   return endOfDay(addDays(startOfWeek(date), 6));
 }
 
-function startOfMonth(date: Date) {
+export function startOfMonth(date: Date) {
   const current = parseDashboardDate(date);
   return new Date(current.getFullYear(), current.getMonth(), 1);
 }
 
-function endOfMonth(date: Date) {
+export function endOfMonth(date: Date) {
   const current = parseDashboardDate(date);
   return endOfDay(new Date(current.getFullYear(), current.getMonth() + 1, 0));
 }
 
-function startOfYear(date: Date) {
+export function startOfYear(date: Date) {
   const current = parseDashboardDate(date);
   return new Date(current.getFullYear(), 0, 1);
 }
 
-function endOfYear(date: Date) {
+export function endOfYear(date: Date) {
   const current = parseDashboardDate(date);
   return endOfDay(new Date(current.getFullYear(), 11, 31));
 }
@@ -109,6 +109,45 @@ export function getPeriodRange(period: DashboardPeriod, referenceDate: string | 
   const end = endOfYear(reference);
 
   return { start, end };
+}
+
+export function getPeriodProgress(period: DashboardPeriod, referenceDate: string | Date = new Date()) {
+  if (period === "all") {
+    return 1;
+  }
+
+  const range = getPeriodRange(period, referenceDate);
+  if (!range) {
+    return 1;
+  }
+
+  const reference = parseDashboardDate(referenceDate);
+  const referenceTime = Math.min(reference.getTime(), range.end.getTime());
+  const elapsedDays = Math.floor((referenceTime - range.start.getTime()) / 86400000) + 1;
+  const totalDays = Math.floor((range.end.getTime() - range.start.getTime()) / 86400000) + 1;
+
+  return Math.max(0, Math.min(1, elapsedDays / totalDays));
+}
+
+export function getPeriodProgressLabel(period: DashboardPeriod, referenceDate: string | Date = new Date()) {
+  const reference = parseDashboardDate(referenceDate);
+
+  if (period === "week") {
+    const labels = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+    return labels[reference.getDay()];
+  }
+
+  if (period === "month") {
+    return `día ${reference.getDate()}`;
+  }
+
+  if (period === "year") {
+    const start = startOfYear(reference);
+    const day = Math.floor((reference.getTime() - start.getTime()) / 86400000) + 1;
+    return `día ${day}`;
+  }
+
+  return "histórico";
 }
 
 export function getPreviousPeriodRange(period: DashboardPeriod, referenceDate: string | Date = new Date()) {

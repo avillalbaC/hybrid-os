@@ -3,43 +3,79 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const navItems = [
-  { href: "/", label: "Home", marker: "01" },
-  { href: "/dashboard", label: "Dashboard", marker: "02" },
-  { href: "/training", label: "Training Log", marker: "03" },
-  { href: "/training/import", label: "Importar JSON", marker: "04" },
-  { href: "/muscle-load", label: "Carga muscular", marker: "05" },
-  { href: "/body", label: "Body Check", marker: "06" },
-  { href: "/nutrition", label: "Nutrición", marker: "07" },
-  { href: "/goals", label: "Objetivos", marker: "08" },
+const navSections = [
+  {
+    label: "Principal",
+    items: [
+      { href: "/", label: "Home", marker: "O" },
+      { href: "/dashboard", label: "Dashboard", marker: "A" },
+    ],
+  },
+  {
+    label: "Entrenamiento",
+    items: [
+      { href: "/training", label: "Training Log", marker: "L" },
+      { href: "/training/import", label: "Importar JSON", marker: "+" },
+      { href: "/training/running", label: "Running", marker: "R" },
+      { href: "/muscle-load", label: "Carga muscular", marker: "C" },
+    ],
+  },
+  {
+    label: "Seguimiento",
+    items: [
+      { href: "/body", label: "Body Check", marker: "B" },
+      { href: "/nutrition", label: "Nutrición", marker: "N" },
+      { href: "/goals", label: "Objetivos", marker: "G" },
+    ],
+  },
 ];
 
-export function MainNav() {
+export function MainNav({
+  collapsed = false,
+  onNavigate,
+}: {
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Navegación principal" className="flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-1.5 lg:overflow-visible lg:pb-0">
-      {navItems.map((item) => {
-        const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+    <nav aria-label="Navegación principal" className="space-y-3">
+      {navSections.map((section) => (
+        <div key={section.label} className={`space-y-1 ${collapsed ? "border-t border-[var(--line)] pt-3 first:border-t-0 first:pt-0" : ""}`}>
+          <p className={`px-2 text-[0.58rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)] ${collapsed ? "sr-only" : ""}`}>
+            {section.label}
+          </p>
+          {section.items.map((item) => {
+            const isActive = item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={isActive ? "page" : undefined}
-            className={`group flex whitespace-nowrap rounded-md border px-3 py-2 text-sm font-semibold transition ${
-              isActive
-                ? "border-[rgba(56,217,159,0.34)] bg-[var(--accent-soft)] text-[var(--foreground)] shadow-[inset_3px_0_0_var(--accent)]"
-                : "border-transparent text-[var(--muted)] hover:border-[var(--line)] hover:bg-[rgba(244,247,244,0.035)] hover:text-[var(--foreground)] focus-visible:bg-[rgba(244,247,244,0.05)]"
-            }`}
-          >
-            <span className={`mr-3 font-mono text-[0.68rem] ${isActive ? "text-[var(--accent)]" : "text-[rgba(139,151,145,0.62)] group-hover:text-[var(--muted)]"}`}>
-              {item.marker}
-            </span>
-            <span>{item.label}</span>
-          </Link>
-        );
-      })}
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNavigate}
+                title={item.label}
+                aria-label={collapsed ? item.label : undefined}
+                aria-current={isActive ? "page" : undefined}
+                className={`group flex h-10 items-center rounded-md border px-2 text-sm font-semibold transition ${
+                  isActive
+                    ? "border-[rgba(56,217,159,0.26)] bg-[rgba(56,217,159,0.1)] text-[var(--foreground)] shadow-[inset_2px_0_0_var(--accent)]"
+                    : "border-transparent text-[var(--muted)] hover:border-[var(--line)] hover:bg-[rgba(244,247,244,0.03)] hover:text-[var(--foreground)] focus-visible:bg-[rgba(244,247,244,0.05)]"
+                } ${collapsed ? "justify-center" : ""}`}
+              >
+                <span className={`grid size-7 shrink-0 place-items-center rounded-md border font-mono text-[0.68rem] ${
+                  isActive
+                    ? "border-[rgba(56,217,159,0.28)] bg-[rgba(56,217,159,0.12)] text-[var(--accent-strong)]"
+                    : "border-[var(--line)] bg-[rgba(244,247,244,0.02)] text-[rgba(139,151,145,0.82)] group-hover:text-[var(--muted-strong)]"
+                }`}>
+                  {item.marker}
+                </span>
+                <span className={`ml-2 min-w-0 truncate ${collapsed ? "sr-only" : "block"}`}>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 }

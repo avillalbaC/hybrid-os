@@ -1,22 +1,19 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { AUTH_COOKIE_NAME } from "@/lib/auth/fake-auth";
+import { requireAllowedUser } from "@/lib/auth/require-allowed-user";
 import { saveAppInputs } from "@/lib/imports/save-app-input";
 import { isTrainingSessionsDatabaseConfigured } from "@/lib/supabase/training-sessions";
 
 export const dynamic = "force-dynamic";
-
-function isAuthenticated() {
-  return cookies().get(AUTH_COOKIE_NAME)?.value === "true";
-}
 
 function hasProperty<T extends string>(value: unknown, property: T): value is Record<T, unknown> {
   return typeof value === "object" && value !== null && property in value;
 }
 
 export async function POST(request: Request) {
-  if (!isAuthenticated()) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAllowedUser();
+
+  if (!auth.ok) {
+    return auth.response;
   }
 
   if (!isTrainingSessionsDatabaseConfigured()) {
@@ -35,7 +32,7 @@ export async function POST(request: Request) {
     ? (body as { inputs: unknown }).inputs
     : body;
   try {
-    const result = await saveAppInputs(inputPayload, { duplicateMode: "error" });
+    const result = await saveAppInputs(inputPayload, { duplicateMode: "upsert" });
 
     if (result.errors.length > 0) {
       return NextResponse.json({ error: "Could not import appInput.", details: result.errors }, { status: 500 });

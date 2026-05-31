@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { replaceTrainingExercises } from "@/lib/supabase/training-sessions";
 import { coercePartialSession, validateHybridOSAppInput, type ValidationIssue } from "@/lib/validation/hybrid-os-input";
 import type { HybridOSAppInput, MovementPattern, TrainingSession } from "@/types/training";

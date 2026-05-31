@@ -38,6 +38,7 @@ export function useTrainingSessions(seedSessions: TrainingSession[]) {
   const [remoteSessions, setRemoteSessions] = useState<TrainingSession[] | null>(null);
   const [source, setSource] = useState<TrainingSessionsSource>("loading");
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
   const [hasHydrated, setHasHydrated] = useState(false);
 
   const refreshStoredSessions = useCallback(() => {
@@ -53,12 +54,14 @@ export function useTrainingSessions(seedSessions: TrainingSession[]) {
     if (!result.ok) {
       setRemoteSessions(null);
       setSource("seed-fallback");
+      setRemoteError(result.message);
       setSyncMessage("Fallback seed: Supabase no está disponible. Las sesiones locales quedan como pendientes.");
       return;
     }
 
     setRemoteSessions(result.sessions);
     setSource(result.sessions.length > 0 ? "remote" : "seed-fallback");
+    setRemoteError(null);
     setSyncMessage(result.sessions.length > 0 ? null : "Fallback seed: Supabase no tiene entrenamientos todavía.");
 
     if (localSessions.length === 0) {
@@ -119,6 +122,7 @@ export function useTrainingSessions(seedSessions: TrainingSession[]) {
     remoteSessions,
     source,
     syncMessage,
+    remoteError,
     hasHydrated,
     async saveSession(session: TrainingSession) {
       try {

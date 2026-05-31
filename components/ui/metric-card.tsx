@@ -4,6 +4,8 @@ export function MetricCard({
   detail,
   delta,
   deltaTone = "neutral",
+  secondaryDelta,
+  secondaryDeltaTone = "neutral",
   tone = "default",
 }: {
   label: string;
@@ -11,13 +13,15 @@ export function MetricCard({
   detail?: string;
   delta?: string;
   deltaTone?: "positive" | "negative" | "neutral";
+  secondaryDelta?: string;
+  secondaryDeltaTone?: "positive" | "negative" | "neutral";
   tone?: "default" | "strong";
 }) {
-  const deltaClassName = {
+  const getDeltaClassName = (value: "positive" | "negative" | "neutral") => ({
     positive: "border-[rgba(56,217,159,0.2)] bg-[rgba(56,217,159,0.08)] text-[var(--accent-strong)]",
     negative: "border-[rgba(240,196,107,0.2)] bg-[rgba(240,196,107,0.08)] text-[var(--warning)]",
     neutral: "border-[var(--line)] bg-[rgba(244,247,244,0.035)] text-[var(--muted-strong)]",
-  }[deltaTone];
+  })[value];
 
   return (
     <div
@@ -31,8 +35,13 @@ export function MetricCard({
       <p className="mt-4 font-mono text-3xl font-black tracking-tight text-[var(--foreground)] sm:text-4xl">{value}</p>
       {detail ? <p className="mt-3 text-sm leading-5 text-[var(--muted)]">{detail}</p> : null}
       {delta ? (
-        <p className={`mt-4 inline-flex rounded-md border px-2.5 py-1.5 font-mono text-xs font-black ${deltaClassName}`}>
+        <p className={`mt-4 inline-flex rounded-md border px-2.5 py-1.5 font-mono text-xs font-black ${getDeltaClassName(deltaTone)}`}>
           {delta}
+        </p>
+      ) : null}
+      {secondaryDelta ? (
+        <p className={`mt-2 inline-flex rounded-md border px-2.5 py-1.5 font-mono text-[0.68rem] font-bold ${getDeltaClassName(secondaryDeltaTone)}`}>
+          {secondaryDelta}
         </p>
       ) : null}
     </div>

@@ -1,4 +1,4 @@
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { BodyCheck } from "@/types/body";
 import type { NutritionCheck } from "@/types/nutrition";
 import type { SessionMuscleSummary, TrainingSession } from "@/types/training";

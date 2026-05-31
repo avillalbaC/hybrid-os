@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { saveAppInputs } from "@/lib/imports/save-app-input";
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isTrainingSessionsDatabaseConfigured } from "@/lib/supabase/training-sessions";
 import { historicalTrainingAppInputs } from "@/src/data/seed/realTrainingSessions";
 

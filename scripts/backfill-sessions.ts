@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { insertTrainingExercises } from "@/lib/supabase/training-sessions";
 import type { TrainingSession } from "@/types/training";
 

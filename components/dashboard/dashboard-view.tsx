@@ -54,14 +54,12 @@ export function DashboardView({
       <section className="mb-8 overflow-hidden rounded-md border border-[var(--line)] bg-[linear-gradient(135deg,rgba(56,217,159,0.14),rgba(21,27,24,0.98)_38%,rgba(12,16,15,0.98))] p-6 shadow-[0_30px_100px_rgba(0,0,0,0.32)] sm:p-8">
         <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-[0.7rem] font-bold uppercase tracking-[0.28em] text-[var(--accent)]">
-              {metrics.periodTitle}
-            </p>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.28em] text-[var(--accent)]">Análisis del periodo</p>
             <h2 className="mt-3 max-w-3xl text-4xl font-black tracking-tight text-[var(--foreground)] sm:text-6xl">
-              Hybrid athlete control room.
+              {metrics.periodTitle}.
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">
-              Entrenamiento, carga muscular, nutrición y señales corporales en una vista de decisión rápida.
+              Métricas, comparativas y tendencias para entender el periodo con más detalle que la vista diaria.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
@@ -93,6 +91,8 @@ export function DashboardView({
           detail={metrics.periodDetail}
           delta={metrics.sessions.deltaLabel}
           deltaTone={metrics.sessions.deltaTone}
+          secondaryDelta={metrics.sessions.previousDeltaLabel}
+          secondaryDeltaTone={metrics.sessions.previousDeltaTone}
           tone="strong"
         />
         <MetricCard
@@ -101,6 +101,8 @@ export function DashboardView({
           detail="Running + HYROX"
           delta={metrics.runningKm.deltaLabel}
           deltaTone={metrics.runningKm.deltaTone}
+          secondaryDelta={metrics.runningKm.previousDeltaLabel}
+          secondaryDeltaTone={metrics.runningKm.previousDeltaTone}
           tone="strong"
         />
         <MetricCard
@@ -109,6 +111,8 @@ export function DashboardView({
           detail={`Carga acumulada · ${metrics.periodDetail}`}
           delta={metrics.durationMinutes.deltaLabel}
           deltaTone={metrics.durationMinutes.deltaTone}
+          secondaryDelta={metrics.durationMinutes.previousDeltaLabel}
+          secondaryDeltaTone={metrics.durationMinutes.previousDeltaTone}
         />
         <MetricCard
           label="RPE medio"
@@ -147,14 +151,25 @@ export function DashboardView({
         />
       </section>
 
-      <DisciplinesOverview sessions={dashboardSessions} />
+      <section className="mt-8">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Detalle por disciplina</p>
+            <h3 className="mt-2 text-2xl font-black tracking-tight">Tendencias y distribución</h3>
+          </div>
+          <Link href="/training/running" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+            Ver running
+          </Link>
+        </div>
+        <DisciplinesOverview sessions={dashboardSessions} />
+      </section>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
         <div>
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
-              <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Actividad reciente</p>
-              <h3 className="mt-2 text-2xl font-black tracking-tight">Últimos entrenamientos</h3>
+              <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Actividad del periodo</p>
+              <h3 className="mt-2 text-2xl font-black tracking-tight">Entrenamientos relevantes</h3>
               <p className="mt-2 text-sm text-[var(--muted)]">{metrics.periodDetail}</p>
             </div>
             <Link href="/training" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
@@ -176,7 +191,7 @@ export function DashboardView({
 
         <div className="space-y-5 lg:sticky lg:top-8 lg:self-start">
           <Card>
-            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Alertas</p>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Qué vigilar</p>
             <h3 className="mt-2 text-2xl font-black tracking-tight">Señales del periodo</h3>
             <div className="mt-4 space-y-2 text-sm leading-6 text-[var(--muted)]">
               {metrics.alerts.length > 0 ? (
@@ -229,7 +244,7 @@ export function DashboardView({
           </Card>
 
           <Card>
-            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Comparativa semanal</p>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Comparativa</p>
             <h3 className="mt-2 text-2xl font-black tracking-tight">{weeklyComparison.current.weekKey}</h3>
             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">

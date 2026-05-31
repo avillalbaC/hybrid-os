@@ -12,8 +12,11 @@ import {
 import {
   type DashboardPeriod,
   type PeriodRange,
+  addDays,
   getLatestDate,
   getPeriodDetail,
+  getPeriodProgress,
+  getPeriodProgressLabel,
   getPeriodRange,
   getPeriodTitle,
   getPreviousPeriodLabel,
@@ -32,12 +35,23 @@ export type MetricDelta = {
 
 export type MetricDeltaTone = "positive" | "negative" | "neutral";
 
+export type ExpectedProgress = {
+  kind: "above" | "on-track" | "below" | "insufficient" | "no-reference" | "all-time";
+  expected: number | null;
+  referenceAverage: number | null;
+  label: string;
+  tone: MetricDeltaTone;
+};
+
 export type DashboardMetric = {
   value: number | null;
   formattedValue: string;
   delta: MetricDelta;
   deltaLabel: string;
   deltaTone: MetricDeltaTone;
+  expectedProgress?: ExpectedProgress;
+  previousDeltaLabel?: string;
+  previousDeltaTone?: MetricDeltaTone;
 };
 
 export type DashboardAlert = {
@@ -84,6 +98,28 @@ function getPeriodItems<T extends { date: string }>(items: T[], period: Dashboar
   };
 }
 
+function getFullHistoricalRanges(period: DashboardPeriod, referenceDate: Date, earliestDate: Date | null) {
+  if (period === "all" || !earliestDate) {
+    return [];
+  }
+
+  const ranges: PeriodRange[] = [];
+  let cursorEnd = addDays(getPeriodRange(period, referenceDate)?.start ?? referenceDate, -1);
+
+  while (cursorEnd.getTime() >= earliestDate.getTime()) {
+    const range = getPeriodRange(period, cursorEnd);
+
+    if (!range || range.end.getTime() >= referenceDate.getTime()) {
+      break;
+    }
+
+    ranges.push(range);
+    cursorEnd = addDays(range.start, -1);
+  }
+
+  return ranges;
+}
+
 function getLatestItem<T extends { date: string }>(items: T[]) {
   return [...items].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null;
 }
@@ -102,6 +138,18 @@ function getLatestDashboardDate(
     ...bodyChecks.map((item) => ({ date: item.date })),
     ...nutritionChecks.map((item) => ({ date: item.date })),
   ]);
+}
+
+function getEarliestDate<T extends { date: string }>(items: T[]) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return items.reduce<Date | null>((earliest, item) => {
+    const current = new Date(`${item.date}T00:00:00`);
+    current.setHours(0, 0, 0, 0);
+    return !earliest || current.getTime() < earliest.getTime() ? current : earliest;
+  }, null);
 }
 
 function getAverageNutritionAdherence(items: NutritionCheck[]) {
@@ -255,10 +303,119 @@ function getDeltaTone(delta: MetricDelta, neutral = false): MetricDeltaTone {
   return delta.value < 0 ? "negative" : "positive";
 }
 
+function formatExpectedLabel(kind: ExpectedProgress["kind"], period: DashboardPeriod, referenceDate: Date) {
+  if (period === "all" || kind === "all-time") {
+    return "Histórico completo";
+  }
+
+  if (kind === "insufficient") {
+    return "Referencia insuficiente";
+  }
+
+  if (kind === "no-reference") {
+    return "Sin referencia";
+  }
+
+  if (kind === "above") {
+    return "Por encima del ritmo esperado";
+  }
+
+  if (kind === "below") {
+    return "Por debajo del ritmo esperado";
+  }
+
+  return `En ritmo para ${getPeriodProgressLabel(period, referenceDate)}`;
+}
+
+export function calculateExpectedProgress<T extends { date: string }>({
+  items,
+  period,
+  referenceDate,
+  currentValue,
+  valueForRange,
+  minimumRanges = 3,
+}: {
+  items: T[];
+  period: DashboardPeriod;
+  referenceDate: Date | null;
+  currentValue: number | null;
+  valueForRange: (items: T[]) => number;
+  minimumRanges?: number;
+}): ExpectedProgress {
+  if (period === "all") {
+    return {
+      kind: "all-time",
+      expected: null,
+      referenceAverage: null,
+      label: "Histórico completo",
+      tone: "neutral",
+    };
+  }
+
+  if (!referenceDate || currentValue === null) {
+    return {
+      kind: "no-reference",
+      expected: null,
+      referenceAverage: null,
+      label: "Sin referencia",
+      tone: "neutral",
+    };
+  }
+
+  const ranges = getFullHistoricalRanges(period, referenceDate, getEarliestDate(items));
+  const rangeValues = ranges.map((range) => valueForRange(filterByRange(items, range)));
+  const values = rangeValues.filter((value) => value > 0);
+
+  if (rangeValues.length >= minimumRanges && values.length === 0) {
+    return {
+      kind: "no-reference",
+      expected: null,
+      referenceAverage: null,
+      label: "Sin referencia",
+      tone: "neutral",
+    };
+  }
+
+  if (values.length < minimumRanges) {
+    return {
+      kind: "insufficient",
+      expected: null,
+      referenceAverage: null,
+      label: "Referencia insuficiente",
+      tone: "neutral",
+    };
+  }
+
+  const referenceAverage = values.reduce((total, value) => total + value, 0) / values.length;
+
+  if (referenceAverage <= 0) {
+    return {
+      kind: "no-reference",
+      expected: null,
+      referenceAverage: null,
+      label: "Sin referencia",
+      tone: "neutral",
+    };
+  }
+
+  const expected = referenceAverage * getPeriodProgress(period, referenceDate);
+  const ratio = expected > 0 ? currentValue / expected : 0;
+  const kind = ratio > 1.15 ? "above" : ratio < 0.85 ? "below" : "on-track";
+
+  return {
+    kind,
+    expected: roundValue(expected),
+    referenceAverage: roundValue(referenceAverage),
+    label: formatExpectedLabel(kind, period, referenceDate),
+    tone: kind === "above" ? "positive" : kind === "below" ? "negative" : "neutral",
+  };
+}
+
 function makeMetric({
   current,
   previous,
   period,
+  expectedProgress,
   format,
   mode = "percent",
   unit = "",
@@ -267,6 +424,7 @@ function makeMetric({
   current: number | null;
   previous: number | null;
   period: DashboardPeriod;
+  expectedProgress?: ExpectedProgress;
   format: (value: number | null) => string;
   mode?: DeltaMode;
   unit?: string;
@@ -280,8 +438,11 @@ function makeMetric({
     value: current,
     formattedValue: format(current),
     delta,
-    deltaLabel: formatDeltaLabel(delta, period, unit),
-    deltaTone: getDeltaTone(delta, neutralDelta),
+    deltaLabel: expectedProgress?.label ?? formatDeltaLabel(delta, period, unit),
+    deltaTone: expectedProgress?.tone ?? getDeltaTone(delta, neutralDelta),
+    expectedProgress,
+    previousDeltaLabel: expectedProgress ? formatDeltaLabel(delta, period, unit) : undefined,
+    previousDeltaTone: expectedProgress ? getDeltaTone(delta, neutralDelta) : undefined,
   };
 }
 
@@ -316,6 +477,34 @@ export function calculateDashboardMetrics(
   const muscleLoadDelta = period === "all"
     ? ({ kind: "all-time", value: 0, mode: "percent" } satisfies MetricDelta)
     : calculateMetricDelta(currentMuscleTotal, previousMuscleTotal);
+  const sessionProgress = calculateExpectedProgress({
+    items: sessions,
+    period,
+    referenceDate,
+    currentValue: getCompletedSessions(sessionPeriods.current),
+    valueForRange: getCompletedSessions,
+  });
+  const runningProgress = calculateExpectedProgress({
+    items: sessions,
+    period,
+    referenceDate,
+    currentValue: roundValue(calculateRunningKm(sessionPeriods.current)),
+    valueForRange: (items) => roundValue(calculateRunningKm(items)),
+  });
+  const durationProgress = calculateExpectedProgress({
+    items: sessions,
+    period,
+    referenceDate,
+    currentValue: calculateTotalDuration(sessionPeriods.current),
+    valueForRange: calculateTotalDuration,
+  });
+  const muscleLoadProgress = calculateExpectedProgress({
+    items: sessions,
+    period,
+    referenceDate,
+    currentValue: currentMuscleTotal,
+    valueForRange: (items) => calculateMuscleLoadRanking(items, 100).reduce((total, item) => total + item.loadScore, 0),
+  });
 
   const alerts = calculateDashboardAlerts({
     period,
@@ -333,18 +522,21 @@ export function calculateDashboardMetrics(
       current: getCompletedSessions(sessionPeriods.current),
       previous: sessionPeriods.previous.length > 0 ? getCompletedSessions(sessionPeriods.previous) : null,
       period,
+      expectedProgress: sessionProgress,
       format: (value) => `${value ?? 0}`,
     }),
     runningKm: makeMetric({
       current: roundValue(calculateRunningKm(sessionPeriods.current)),
       previous: sessionPeriods.previous.length > 0 ? roundValue(calculateRunningKm(sessionPeriods.previous)) : null,
       period,
+      expectedProgress: runningProgress,
       format: (value) => `${(value ?? 0).toFixed(1)} km`,
     }),
     durationMinutes: makeMetric({
       current: calculateTotalDuration(sessionPeriods.current),
       previous: sessionPeriods.previous.length > 0 ? calculateTotalDuration(sessionPeriods.previous) : null,
       period,
+      expectedProgress: durationProgress,
       format: (value) => `${value ?? 0} min`,
     }),
     averageRpe: makeMetric({
@@ -390,7 +582,7 @@ export function calculateDashboardMetrics(
     }),
     topMuscles: currentMuscleLoad.slice(0, 5),
     muscleLoadDelta,
-    muscleLoadDeltaLabel: formatDeltaLabel(muscleLoadDelta, period),
+    muscleLoadDeltaLabel: muscleLoadProgress.label,
     recentSessions: [...sessionPeriods.current]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 4),

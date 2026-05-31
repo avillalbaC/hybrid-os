@@ -207,6 +207,39 @@ export type RemoteAppInputImportResult = {
   savedNutritionCheckIds: string[];
 };
 
+export type RemoteAppInputImportErrorDetail = {
+  id?: string;
+  phase?: string;
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
+export class RemoteAppInputImportError extends Error {
+  status: number;
+  duplicateIds: string[];
+  details: RemoteAppInputImportErrorDetail[];
+  issues: unknown;
+
+  constructor(
+    message: string,
+    options: {
+      status: number;
+      duplicateIds?: string[];
+      details?: RemoteAppInputImportErrorDetail[];
+      issues?: unknown;
+    },
+  ) {
+    super(message);
+    this.name = "RemoteAppInputImportError";
+    this.status = options.status;
+    this.duplicateIds = options.duplicateIds ?? [];
+    this.details = options.details ?? [];
+    this.issues = options.issues;
+  }
+}
+
 export async function saveRemoteAppInputs(inputs: HybridOSAppInput[]): Promise<RemoteAppInputImportResult> {
   const response = await fetch("/api/imports", {
     method: "POST",
@@ -216,13 +249,24 @@ export async function saveRemoteAppInputs(inputs: HybridOSAppInput[]): Promise<R
     body: JSON.stringify({ inputs }),
   });
 
-  if (response.status === 409) {
-    const payload = (await response.json()) as { message?: string; duplicateIds?: string[] };
-    throw new Error(payload.message ?? `Ya existe una sesión con ese id: ${(payload.duplicateIds ?? []).join(", ")}`);
-  }
-
   if (!response.ok) {
-    throw new Error("No se pudo guardar el appInput en Supabase.");
+    const payload = await response.json().catch(() => ({})) as {
+      error?: string;
+      message?: string;
+      duplicateIds?: string[];
+      details?: RemoteAppInputImportErrorDetail[];
+      issues?: unknown;
+    };
+
+    throw new RemoteAppInputImportError(
+      payload.message ?? payload.error ?? "No se pudo guardar el appInput en Supabase.",
+      {
+        status: response.status,
+        duplicateIds: payload.duplicateIds,
+        details: payload.details,
+        issues: payload.issues,
+      },
+    );
   }
 
   const payload = (await response.json()) as RemoteAppInputImportResult;

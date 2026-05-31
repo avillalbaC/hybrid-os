@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { AUTH_COOKIE_NAME } from "@/lib/auth/fake-auth";
+import { requireAllowedUser } from "@/lib/auth/require-allowed-user";
 import {
   isTrainingSessionsDatabaseConfigured,
   listRemoteBodyChecks,
@@ -10,13 +9,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-function isAuthenticated() {
-  return cookies().get(AUTH_COOKIE_NAME)?.value === "true";
-}
-
 export async function GET() {
-  if (!isAuthenticated()) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAllowedUser();
+
+  if (!auth.ok) {
+    return auth.response;
   }
 
   if (!isTrainingSessionsDatabaseConfigured()) {
