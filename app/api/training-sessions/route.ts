@@ -16,7 +16,7 @@ export async function GET() {
   }
 
   try {
-    const sessions = await listRemoteTrainingSessions();
+    const sessions = await listRemoteTrainingSessions(auth.user.id);
     return NextResponse.json({ sessions });
   } catch {
     return NextResponse.json({ error: "Could not load training sessions." }, { status: 500 });

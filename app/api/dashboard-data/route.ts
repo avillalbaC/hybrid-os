@@ -22,9 +22,9 @@ export async function GET() {
 
   try {
     const [sessions, bodyChecks, nutritionChecks] = await Promise.all([
-      listRemoteTrainingSessions(),
-      listRemoteBodyChecks(),
-      listRemoteNutritionChecks(),
+      listRemoteTrainingSessions(auth.user.id),
+      listRemoteBodyChecks(auth.user.id),
+      listRemoteNutritionChecks(auth.user.id),
     ]);
 
     return NextResponse.json({ sessions, bodyChecks, nutritionChecks });

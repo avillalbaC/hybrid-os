@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     ? (body as { inputs: unknown }).inputs
     : body;
   try {
-    const result = await saveAppInputs(inputPayload, { duplicateMode: "upsert" });
+    const result = await saveAppInputs(inputPayload, { duplicateMode: "upsert", userId: auth.user.id });
 
     if (result.errors.length > 0) {
       return NextResponse.json({ error: "Could not import appInput.", details: result.errors }, { status: 500 });

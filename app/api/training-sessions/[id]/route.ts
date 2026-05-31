@@ -35,7 +35,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 
   try {
-    const session = await upsertRemoteTrainingSession(coercePartialSession(result.value));
+    const session = await upsertRemoteTrainingSession(coercePartialSession(result.value), auth.user.id);
     return NextResponse.json({ session });
   } catch {
     return NextResponse.json({ error: "Could not save training session." }, { status: 500 });
@@ -54,7 +54,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
   }
 
   try {
-    await deleteRemoteTrainingSession(params.id);
+    await deleteRemoteTrainingSession(params.id, auth.user.id);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Could not delete training session." }, { status: 500 });

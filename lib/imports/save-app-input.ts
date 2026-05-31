@@ -92,6 +92,7 @@ export type SaveAppInputsResult = {
 export type SaveAppInputsOptions = {
   duplicateMode?: "error" | "skip" | "upsert";
   sourceLabel?: string;
+  userId?: string;
 };
 
 function withImportSource(input: HybridOSAppInput, sourceLabel?: string): HybridOSAppInput {
@@ -155,7 +156,7 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
     }
 
     try {
-      const existingSession = await runImportPhase("duplicate_check", () => getRemoteTrainingSessionById(sessionId));
+      const existingSession = await runImportPhase("duplicate_check", () => getRemoteTrainingSessionById(sessionId, options.userId));
       const shouldUpsertSession = Boolean(existingSession) && options.duplicateMode === "upsert";
 
       if (existingSession) {
@@ -176,26 +177,26 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
       const savedNutritionCheckIds: string[] = [];
 
       const persistedSession = await runImportPhase("training_sessions", () =>
-        shouldUpsertSession ? upsertRemoteTrainingSession(session) : insertRemoteTrainingSession(session),
+        shouldUpsertSession ? upsertRemoteTrainingSession(session, options.userId) : insertRemoteTrainingSession(session, options.userId),
       );
       const persistedSessionId = persistedSession.id;
 
-      await runImportPhase("raw_imports", () => insertRawImport(input, persistedSessionId));
+      await runImportPhase("raw_imports", () => insertRawImport(input, persistedSessionId, options.userId));
       console.info("[Hybrid OS import] metrics: ok");
       console.info("[Hybrid OS import] muscle_loads: ok");
       await runImportPhase("training_exercises", () =>
-        shouldUpsertSession ? replaceTrainingExercises(session) : insertTrainingExercises(session),
+        shouldUpsertSession ? replaceTrainingExercises(session, options.userId) : insertTrainingExercises(session, options.userId),
       );
 
       if (input.bodyCheck) {
         const bodyCheck = input.bodyCheck;
-        await runImportPhase("body_checks", () => upsertBodyCheck(bodyCheck));
+        await runImportPhase("body_checks", () => upsertBodyCheck(bodyCheck, options.userId));
         savedBodyCheckIds.push(bodyCheck.id);
       }
 
       if (input.nutritionCheck) {
         const nutritionCheck = input.nutritionCheck;
-        await runImportPhase("nutrition_checks", () => upsertNutritionCheck(nutritionCheck));
+        await runImportPhase("nutrition_checks", () => upsertNutritionCheck(nutritionCheck, options.userId));
         savedNutritionCheckIds.push(nutritionCheck.id);
       }
 

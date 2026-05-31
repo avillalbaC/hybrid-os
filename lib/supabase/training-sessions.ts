@@ -5,8 +5,14 @@ import type { SessionMuscleSummary, TrainingSession } from "@/types/training";
 
 const TABLE_NAME = "training_sessions";
 
+type OwnedRow = {
+  id: string;
+  user_id: string | null;
+};
+
 type TrainingSessionRow = {
   id: string;
+  user_id?: string | null;
   session_date: string;
   title: string;
   type: string;
@@ -21,8 +27,8 @@ type TrainingSessionRow = {
   updated_at?: string;
 };
 
-function toRow(session: TrainingSession): TrainingSessionRow {
-  return {
+function toRow(session: TrainingSession, userId?: string): TrainingSessionRow {
+  const row: TrainingSessionRow = {
     id: session.id,
     session_date: session.date,
     title: session.title,
@@ -36,6 +42,12 @@ function toRow(session: TrainingSession): TrainingSessionRow {
     payload: session,
     updated_at: new Date().toISOString(),
   };
+
+  if (userId) {
+    row.user_id = userId;
+  }
+
+  return row;
 }
 
 function fromRow(row: TrainingSessionRow): TrainingSession {
@@ -55,7 +67,11 @@ export function isTrainingSessionsDatabaseConfigured() {
   return getSupabaseAdminClient() !== null;
 }
 
-export async function listRemoteTrainingSessions() {
+async function assertRowBelongsToUser(tableName: string, id: string, userId?: string) {
+  if (!userId) {
+    return;
+  }
+
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
@@ -63,9 +79,38 @@ export async function listRemoteTrainingSessions() {
   }
 
   const { data, error } = await supabase
+    .from(tableName)
+    .select("id, user_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  const row = data as OwnedRow | null;
+
+  if (row && row.user_id !== userId) {
+    throw new Error("Cannot modify a row owned by another user.");
+  }
+}
+
+export async function listRemoteTrainingSessions(userId?: string) {
+  const supabase = getSupabaseAdminClient();
+
+  if (!supabase) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  let query = supabase
     .from(TABLE_NAME)
-    .select("id, session_date, title, type, source, data_quality, running_distance_meters, duration_minutes, rpe, session_muscle_summary, payload")
-    .order("session_date", { ascending: false });
+    .select("id, user_id, session_date, title, type, source, data_quality, running_distance_meters, duration_minutes, rpe, session_muscle_summary, payload");
+
+  if (userId) {
+    query = query.eq("user_id", userId);
+  }
+
+  const { data, error } = await query.order("session_date", { ascending: false });
 
   if (error) {
     throw error;
@@ -74,17 +119,22 @@ export async function listRemoteTrainingSessions() {
   return (data ?? []).map((row) => fromRow(row as TrainingSessionRow));
 }
 
-export async function listRemoteBodyChecks() {
+export async function listRemoteBodyChecks(userId?: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     throw new Error("Supabase is not configured.");
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("body_checks")
-    .select("payload")
-    .order("check_date", { ascending: false });
+    .select("payload");
+
+  if (userId) {
+    query = query.eq("user_id", userId);
+  }
+
+  const { data, error } = await query.order("check_date", { ascending: false });
 
   if (error) {
     throw error;
@@ -93,17 +143,22 @@ export async function listRemoteBodyChecks() {
   return (data ?? []).map((row) => row.payload as BodyCheck);
 }
 
-export async function listRemoteNutritionChecks() {
+export async function listRemoteNutritionChecks(userId?: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     throw new Error("Supabase is not configured.");
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("nutrition_checks")
-    .select("payload")
-    .order("check_date", { ascending: false });
+    .select("payload");
+
+  if (userId) {
+    query = query.eq("user_id", userId);
+  }
+
+  const { data, error } = await query.order("check_date", { ascending: false });
 
   if (error) {
     throw error;
@@ -112,18 +167,23 @@ export async function listRemoteNutritionChecks() {
   return (data ?? []).map((row) => row.payload as NutritionCheck);
 }
 
-export async function getRemoteTrainingSessionById(id: string) {
+export async function getRemoteTrainingSessionById(id: string, userId?: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     throw new Error("Supabase is not configured.");
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from(TABLE_NAME)
     .select("id")
-    .eq("id", id)
-    .maybeSingle();
+    .eq("id", id);
+
+  if (userId) {
+    query = query.eq("user_id", userId);
+  }
+
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     throw error;
@@ -132,14 +192,16 @@ export async function getRemoteTrainingSessionById(id: string) {
   return data;
 }
 
-export async function upsertRemoteTrainingSession(session: TrainingSession) {
+export async function upsertRemoteTrainingSession(session: TrainingSession, userId?: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     throw new Error("Supabase is not configured.");
   }
 
-  const { error } = await supabase.from(TABLE_NAME).upsert(toRow(session), {
+  await assertRowBelongsToUser(TABLE_NAME, session.id, userId);
+
+  const { error } = await supabase.from(TABLE_NAME).upsert(toRow(session, userId), {
     onConflict: "id",
   });
 
@@ -150,14 +212,14 @@ export async function upsertRemoteTrainingSession(session: TrainingSession) {
   return session;
 }
 
-export async function insertRemoteTrainingSession(session: TrainingSession) {
+export async function insertRemoteTrainingSession(session: TrainingSession, userId?: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     throw new Error("Supabase is not configured.");
   }
 
-  const { error } = await supabase.from(TABLE_NAME).insert(toRow(session));
+  const { error } = await supabase.from(TABLE_NAME).insert(toRow(session, userId));
 
   if (error) {
     throw error;
@@ -166,35 +228,44 @@ export async function insertRemoteTrainingSession(session: TrainingSession) {
   return session;
 }
 
-export async function insertRawImport(rawPayload: unknown, trainingSessionId: string) {
+export async function insertRawImport(rawPayload: unknown, trainingSessionId: string, userId?: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     throw new Error("Supabase is not configured.");
   }
 
-  const { error } = await supabase.from("raw_imports").insert({
+  const row = {
     training_session_id: trainingSessionId,
     import_type: "appInput",
     raw_payload: rawPayload,
-  });
+    ...(userId ? { user_id: userId } : {}),
+  };
+
+  const { error } = await supabase.from("raw_imports").insert(row);
 
   if (error) {
     throw error;
   }
 }
 
-export async function replaceTrainingExercises(session: TrainingSession) {
+export async function replaceTrainingExercises(session: TrainingSession, userId?: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     throw new Error("Supabase is not configured.");
   }
 
-  const { error: deleteError } = await supabase
+  let deleteQuery = supabase
     .from("training_exercises")
     .delete()
     .eq("training_session_id", session.id);
+
+  if (userId) {
+    deleteQuery = deleteQuery.eq("user_id", userId);
+  }
+
+  const { error: deleteError } = await deleteQuery;
 
   if (deleteError) {
     throw deleteError;
@@ -212,6 +283,7 @@ export async function replaceTrainingExercises(session: TrainingSession) {
       movement_pattern: exercise.movementPattern,
       payload: exercise,
       updated_at: new Date().toISOString(),
+      ...(userId ? { user_id: userId } : {}),
     })),
   );
 
@@ -228,7 +300,7 @@ export async function replaceTrainingExercises(session: TrainingSession) {
   }
 }
 
-export async function insertTrainingExercises(session: TrainingSession) {
+export async function insertTrainingExercises(session: TrainingSession, userId?: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
@@ -247,6 +319,7 @@ export async function insertTrainingExercises(session: TrainingSession) {
       movement_pattern: exercise.movementPattern,
       payload: exercise,
       updated_at: new Date().toISOString(),
+      ...(userId ? { user_id: userId } : {}),
     })),
   );
 
@@ -261,12 +334,14 @@ export async function insertTrainingExercises(session: TrainingSession) {
   }
 }
 
-export async function upsertBodyCheck(bodyCheck: BodyCheck) {
+export async function upsertBodyCheck(bodyCheck: BodyCheck, userId?: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     throw new Error("Supabase is not configured.");
   }
+
+  await assertRowBelongsToUser("body_checks", bodyCheck.id, userId);
 
   const { error } = await supabase.from("body_checks").upsert(
     {
@@ -276,6 +351,7 @@ export async function upsertBodyCheck(bodyCheck: BodyCheck) {
       waist_cm: bodyCheck.waistCm,
       payload: bodyCheck,
       updated_at: new Date().toISOString(),
+      ...(userId ? { user_id: userId } : {}),
     },
     { onConflict: "id" },
   );
@@ -285,12 +361,14 @@ export async function upsertBodyCheck(bodyCheck: BodyCheck) {
   }
 }
 
-export async function upsertNutritionCheck(nutritionCheck: NutritionCheck) {
+export async function upsertNutritionCheck(nutritionCheck: NutritionCheck, userId?: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     throw new Error("Supabase is not configured.");
   }
+
+  await assertRowBelongsToUser("nutrition_checks", nutritionCheck.id, userId);
 
   const { error } = await supabase.from("nutrition_checks").upsert(
     {
@@ -300,6 +378,7 @@ export async function upsertNutritionCheck(nutritionCheck: NutritionCheck) {
       adherence_percent: nutritionCheck.adherencePercent,
       payload: nutritionCheck,
       updated_at: new Date().toISOString(),
+      ...(userId ? { user_id: userId } : {}),
     },
     { onConflict: "id" },
   );
@@ -309,14 +388,20 @@ export async function upsertNutritionCheck(nutritionCheck: NutritionCheck) {
   }
 }
 
-export async function deleteRemoteTrainingSession(id: string) {
+export async function deleteRemoteTrainingSession(id: string, userId?: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     throw new Error("Supabase is not configured.");
   }
 
-  const { error } = await supabase.from(TABLE_NAME).delete().eq("id", id);
+  let query = supabase.from(TABLE_NAME).delete().eq("id", id);
+
+  if (userId) {
+    query = query.eq("user_id", userId);
+  }
+
+  const { error } = await query;
 
   if (error) {
     throw error;
