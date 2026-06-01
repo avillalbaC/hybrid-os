@@ -1,3 +1,4 @@
+import { isPureRunningSession } from "@/lib/domain/training/session-kind";
 import { createEmptyMuscleSummary, muscleNames } from "@/lib/selectors/training";
 import type { BodyCheck } from "@/types/body";
 import type { NutritionCheck } from "@/types/nutrition";
@@ -6,6 +7,7 @@ import type {
   DateConfidence,
   DateRule,
   HybridOSAppInput,
+  HybridOSAppInputVersion,
   MovementPattern,
   MuscleRole,
   PendingField,
@@ -78,6 +80,8 @@ export const trainingSessionTypes: TrainingSessionType[] = [
   "actividad_funcional",
   "mixed",
 ];
+
+export const appInputVersions: HybridOSAppInputVersion[] = ["1.0", "1.1"];
 
 export const trainingSubtypes: TrainingSubtype[] = [
   "pairs",
@@ -373,6 +377,23 @@ function validateResult(value: unknown, path: string, errors: ValidationIssue[])
   }
 }
 
+function validateEquipment(value: unknown, path: string, errors: ValidationIssue[]) {
+  if (!isRecord(value)) {
+    errors.push({ path, message: "equipment debe ser un objeto si existe.", receivedValue: value, code: "type" });
+    return;
+  }
+
+  if (value.shoes !== undefined && !optionalStringOrNull(value.shoes)) {
+    errors.push({
+      path: `${path}.shoes`,
+      message: "Debe ser string o null.",
+      receivedValue: value.shoes,
+      suggestion: "Usa el modelo de zapatilla como texto o null si no se conoce.",
+      code: "type",
+    });
+  }
+}
+
 function validateBodyCheck(value: unknown, path: string, errors: ValidationIssue[], warnings: ValidationIssue[]): value is BodyCheck {
   if (!isRecord(value)) {
     errors.push({ path, message: "bodyCheck debe ser un objeto.", receivedValue: value, code: "type" });
@@ -508,6 +529,7 @@ export function validateTrainingSession(session: unknown): ValidationResult<Trai
 
   validateResult(session.result, "trainingSession.result", errors);
   validateMetrics(session.sessionMetrics, "trainingSession.sessionMetrics", errors);
+  if (session.equipment !== undefined) validateEquipment(session.equipment, "trainingSession.equipment", errors);
   validateMuscleSummary(session.sessionMuscleSummary, "trainingSession.sessionMuscleSummary", errors);
 
   if (!optionalStringOrNull(session.location)) warnings.push({ path: "trainingSession.location", message: "Ubicación pendiente." });
@@ -535,8 +557,8 @@ export function validateHybridOSAppInput(input: unknown): ValidationResult<Hybri
   requireField(input, "generatedAt", "root", errors);
   requireField(input, "trainingSession", "root", errors);
 
-  if (input.appInputVersion !== "1.0") {
-    errors.push({ path: "appInputVersion", message: "Debe ser 1.0.", receivedValue: input.appInputVersion, allowedValues: ["1.0"], code: "enum" });
+  if (!appInputVersions.includes(input.appInputVersion as HybridOSAppInputVersion)) {
+    errors.push({ path: "appInputVersion", message: "Debe ser 1.0 o 1.1.", receivedValue: input.appInputVersion, allowedValues: appInputVersions, code: "enum" });
   }
 
   if (input.generatedBy !== "gpt") {
@@ -882,6 +904,7 @@ export function getAllowedValuesForPath(path: string): string[] | undefined {
     "trainingSession.result.type": resultTypes,
     "trainingSession.dataQuality": dataQualities,
     "trainingSession.pendingFields[]": pendingFields,
+    "appInputVersion": appInputVersions,
   };
 
   return enumValuesByPath[normalizedPath];
@@ -1068,6 +1091,15 @@ export function generateImportWarnings(input: HybridOSAppInput): ImportIssue[] {
       receivedValue: "Otro",
       allowedValues: pendingFields,
       suggestion: "Sustituye \"Otro\" por un campo más específico si es posible.",
+    });
+  }
+
+  if (isPureRunningSession(session) && isBlank(session.equipment?.shoes)) {
+    addWarning(warnings, {
+      path: "trainingSession.equipment.shoes",
+      message: "Zapatillas no indicadas. Esta sesión de running no podrá sumar volumen por modelo.",
+      receivedValue: session.equipment?.shoes,
+      suggestion: "Añade trainingSession.equipment.shoes si conoces el modelo. No lo añadas a pendingFields.",
     });
   }
 

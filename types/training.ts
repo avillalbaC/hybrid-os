@@ -6,6 +6,8 @@ export type SessionStatus = "completed" | "partial" | "planned" | "cancelled";
 
 export type DataQuality = "high" | "partial" | "low";
 
+export type HybridOSAppInputVersion = "1.0" | "1.1";
+
 export type TrainingSessionType =
   | "crossfit"
   | "hyrox"
@@ -119,6 +121,10 @@ export type SessionMetrics = {
   fatigueCost: number;
 };
 
+export type TrainingEquipment = {
+  shoes?: string | null;
+};
+
 export type TrainingResult = {
   type: "time" | "rounds_reps" | "load" | "distance" | "calories" | "cap" | "partial" | "none";
   score: string | null;
@@ -179,6 +185,7 @@ export type TrainingSession = {
   blocks: TrainingBlock[];
   result: TrainingResult | null;
   sessionMetrics: SessionMetrics;
+  equipment?: TrainingEquipment;
   sessionMuscleSummary: SessionMuscleSummary;
   tags: string[];
   soreness: string[];
@@ -222,7 +229,7 @@ export type TrainingAlert = {
 };
 
 export type HybridOSAppInput = {
-  appInputVersion: "1.0";
+  appInputVersion: HybridOSAppInputVersion;
   generatedBy: "gpt";
   generatedAt: string;
   trainingSession: TrainingSession;

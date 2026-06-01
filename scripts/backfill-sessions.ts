@@ -114,7 +114,7 @@ async function loadTrainingSession(id: string) {
   const { data, error } = await supabase
     .from("training_sessions")
     .select(
-      "id, duration_minutes, rpe, running_distance_meters, session_muscle_summary, payload",
+      "id, user_id, duration_minutes, rpe, running_distance_meters, session_muscle_summary, payload",
     )
     .eq("id", id)
     .maybeSingle();
@@ -125,6 +125,7 @@ async function loadTrainingSession(id: string) {
 
   return data as {
     id: string;
+    user_id: string | null;
     duration_minutes: number | null;
     rpe: number | null;
     running_distance_meters: number | null;
@@ -168,7 +169,15 @@ function getNullableAnalyticUpdates(row: NonNullable<Awaited<ReturnType<typeof l
   };
 }
 
-async function updateNullableAnalytics(id: string, updates: Record<string, unknown>) {
+function requireOwnedRow(row: NonNullable<Awaited<ReturnType<typeof loadTrainingSession>>>) {
+  if (!row.user_id) {
+    throw new Error(`Training session has no user_id: ${row.id}`);
+  }
+
+  return row.user_id;
+}
+
+async function updateNullableAnalytics(id: string, updates: Record<string, unknown>, userId: string) {
   const updateKeys = Object.keys(updates);
 
   if (updateKeys.length === 0) {
@@ -179,7 +188,8 @@ async function updateNullableAnalytics(id: string, updates: Record<string, unkno
   const { error } = await supabase
     .from("training_sessions")
     .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", userId);
 
   if (error) {
     throw error;
@@ -188,9 +198,10 @@ async function updateNullableAnalytics(id: string, updates: Record<string, unkno
   return updateKeys;
 }
 
-async function insertRawImportFromPayload(id: string, payload: TrainingSession) {
+async function insertRawImportFromPayload(id: string, payload: TrainingSession, userId: string) {
   const supabase = getSupabaseOrThrow();
   const { error } = await supabase.from("raw_imports").insert({
+    user_id: userId,
     training_session_id: id,
     import_type: "backfill-from-session-payload",
     raw_payload: {
@@ -263,14 +274,15 @@ async function backfill(id: string) {
     };
   }
 
+  const userId = requireOwnedRow(row);
   const analyticsUpdated = await runPhase("training_sessions", () =>
-    updateNullableAnalytics(id, getNullableAnalyticUpdates(row)),
+    updateNullableAnalytics(id, getNullableAnalyticUpdates(row), userId),
   );
   const exercisesBefore = await runPhase("diagnose", () => countRows("training_exercises", "training_session_id", id));
   let exercisesCreated = 0;
 
   if (exercisesBefore === 0 && row.payload.blocks.some((block) => block.exercises.length > 0)) {
-    await runPhase("training_exercises", () => insertTrainingExercises(row.payload as TrainingSession));
+    await runPhase("training_exercises", () => insertTrainingExercises(row.payload as TrainingSession, userId));
     exercisesCreated = row.payload.blocks.reduce((total, block) => total + block.exercises.length, 0);
   }
 
@@ -278,7 +290,7 @@ async function backfill(id: string) {
   let rawImportCreated = false;
 
   if (rawImportsBefore === 0) {
-    await runPhase("raw_imports", () => insertRawImportFromPayload(id, row.payload as TrainingSession));
+    await runPhase("raw_imports", () => insertRawImportFromPayload(id, row.payload as TrainingSession, userId));
     rawImportCreated = true;
   }
 

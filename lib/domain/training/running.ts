@@ -1,4 +1,5 @@
 import { getPeriodRange, getPreviousPeriodRange, isDateInRange } from "@/lib/domain/dashboard/periods";
+import { isPureRunningSession } from "@/lib/domain/training/session-kind";
 import { getWeekKey } from "@/lib/selectors/training";
 import type { TrainingSession } from "@/types/training";
 
@@ -22,6 +23,12 @@ export type RunningPeriodStats = {
 
 export type RunningWeekSummary = {
   weekKey: string;
+  runMeters: number;
+  sessions: number;
+};
+
+export type RunningShoeVolume = {
+  shoes: string;
   runMeters: number;
   sessions: number;
 };
@@ -53,7 +60,7 @@ export function getSessionRunMeters(session: TrainingSession) {
 }
 
 export function getRunningContext(session: TrainingSession): RunningContext {
-  if (session.type === "running") {
+  if (isPureRunningSession(session)) {
     return "pure";
   }
 
@@ -62,6 +69,20 @@ export function getRunningContext(session: TrainingSession): RunningContext {
   }
 
   return "mixed";
+}
+
+export function getRunningShoeVolumes(rows: RunningSessionRow[]): RunningShoeVolume[] {
+  const summaries = rows
+    .filter((row) => isPureRunningSession(row.session))
+    .reduce<Record<string, RunningShoeVolume>>((volumes, row) => {
+      const shoes = row.session.equipment?.shoes?.trim() || "Sin zapatilla registrada";
+      volumes[shoes] = volumes[shoes] ?? { shoes, runMeters: 0, sessions: 0 };
+      volumes[shoes].runMeters += row.runMeters;
+      volumes[shoes].sessions += 1;
+      return volumes;
+    }, {});
+
+  return Object.values(summaries).sort((a, b) => b.runMeters - a.runMeters);
 }
 
 function collectSearchText(session: TrainingSession) {

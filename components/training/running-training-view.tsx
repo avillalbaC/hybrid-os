@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import {
   getCurrentRunningPeriods,
   getRunningContextTotals,
+  getRunningShoeVolumes,
   getRunningSessionRows,
   groupRunningByCalendarWeek,
   summarizeRunning,
@@ -113,6 +114,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
   const periods = getCurrentRunningPeriods(runningRows);
   const historicalStats = summarizeRunning(runningRows);
   const contextTotals = getRunningContextTotals(runningRows);
+  const shoeVolumes = getRunningShoeVolumes(runningRows);
   const weeklySummaries = groupRunningByCalendarWeek(runningRows, 12);
   const maxWeeklyMeters = Math.max(...weeklySummaries.map((week) => week.runMeters), 1);
 
@@ -264,6 +266,21 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
                   </div>
                 ))}
               </div>
+            )}
+          </Card>
+
+          <Card>
+            <h3 className="text-lg font-semibold">Volumen por zapatilla</h3>
+            {shoeVolumes.length === 0 ? (
+              <div className="mt-4">
+                <EmptyState title="Sin sesiones de running puro" description="El volumen por modelo solo suma sesiones con type running." />
+              </div>
+            ) : (
+              <dl className="mt-4 space-y-3">
+                {shoeVolumes.map((entry) => (
+                  <StatLine key={entry.shoes} label={entry.shoes} value={`${formatKm(entry.runMeters)} · ${entry.sessions} sesiones`} />
+                ))}
+              </dl>
             )}
           </Card>
         </aside>

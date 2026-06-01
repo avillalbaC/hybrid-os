@@ -141,7 +141,7 @@ async function getExistingSession(id: string) {
 
   const { data, error } = await supabase
     .from("training_sessions")
-    .select("id, payload")
+    .select("id, user_id, payload")
     .eq("id", id)
     .maybeSingle();
 
@@ -171,7 +171,15 @@ async function countRows(table: string, column: string, value: string) {
   return count ?? 0;
 }
 
-async function updateTrainingSession(session: TrainingSession) {
+function requireExistingUserId(existingSession: { id: string; user_id?: string | null }) {
+  if (!existingSession.user_id) {
+    throw new Error(`Training session has no user_id: ${existingSession.id}`);
+  }
+
+  return existingSession.user_id;
+}
+
+async function updateTrainingSession(session: TrainingSession, userId: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
@@ -181,14 +189,15 @@ async function updateTrainingSession(session: TrainingSession) {
   const { error } = await supabase
     .from("training_sessions")
     .update(toTrainingSessionUpdate(session))
-    .eq("id", session.id);
+    .eq("id", session.id)
+    .eq("user_id", userId);
 
   if (error) {
     throw error;
   }
 }
 
-async function insertManualReplacementRawImport(input: HybridOSAppInput) {
+async function insertManualReplacementRawImport(input: HybridOSAppInput, userId: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
@@ -196,6 +205,7 @@ async function insertManualReplacementRawImport(input: HybridOSAppInput) {
   }
 
   const { error } = await supabase.from("raw_imports").insert({
+    user_id: userId,
     training_session_id: input.trainingSession.id,
     import_type: "manual-replacement",
     raw_payload: input,
@@ -240,9 +250,11 @@ async function replaceExistingSession(input: HybridOSAppInput) {
     };
   }
 
-  await runPhase("training_sessions", () => updateTrainingSession(session));
-  await runPhase("training_exercises", () => replaceTrainingExercises(session));
-  await runPhase("raw_imports", () => insertManualReplacementRawImport({ ...input, trainingSession: session }));
+  const userId = requireExistingUserId(existingSession);
+
+  await runPhase("training_sessions", () => updateTrainingSession(session, userId));
+  await runPhase("training_exercises", () => replaceTrainingExercises(session, userId));
+  await runPhase("raw_imports", () => insertManualReplacementRawImport({ ...input, trainingSession: session }, userId));
 
   return {
     ok: true,

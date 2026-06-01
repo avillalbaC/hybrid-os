@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { isPureRunningSession } from "@/lib/domain/training/session-kind";
+import { addShoesToHybridOSJson } from "@/lib/imports/app-input-json";
 import { getTopMuscles } from "@/lib/selectors/training";
 import { RemoteAppInputImportError, saveRemoteAppInputs, type RemoteAppInputImportErrorDetail } from "@/lib/storage/training-storage";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
@@ -89,7 +91,7 @@ Formato de salida aceptado:
 
 Contrato raiz:
 {
-  "appInputVersion": "1.0",
+  "appInputVersion": "1.1",
   "generatedBy": "gpt",
   "generatedAt": "ISO string",
   "trainingSession": TrainingSession,
@@ -104,6 +106,10 @@ Reglas criticas:
 - Mantén "rawText" con el texto original o un resumen fiel del texto original.
 - "sessionMuscleSummary" debe incluir siempre todos los musculos con valores de 0 a 100.
 - "sessionMetrics" debe incluir siempre todas sus claves.
+- Para running puro (trainingSession.type === "running"), si el usuario indica zapatillas, rellena "trainingSession.equipment.shoes".
+- Para running puro sin zapatillas indicadas, no las inventes y añade en "importNotes": "Zapatillas no indicadas; pendiente para seguimiento de volumen por modelo."
+- No añadas zapatillas a "pendingFields".
+- Para HYROX, CrossFit o mixed con carrera, no exijas zapatillas salvo que el usuario las indique explícitamente.
 - "blocks" puede estar vacio solo si no hay detalle suficiente, pero si hay ejercicios debes crear bloques y ejercicios.
 - Los ids deben ser estables, en kebab-case, preferiblemente con tipo-fecha-titulo. Ejemplo: "hyrox-2026-05-26-pairs-workout".
 
@@ -204,6 +210,9 @@ TrainingSession completo:
     "technicalLoad": number,
     "fatigueCost": number
   },
+  "equipment": {
+    "shoes": string | null
+  } opcional,
   "sessionMuscleSummary": {
     "quadriceps": number,
     "hamstrings": number,
@@ -516,10 +525,34 @@ function SaveErrorDetails({ error }: { error: SaveErrorState | null }) {
   );
 }
 
-function PreviewCard({ input }: { input: HybridOSAppInput }) {
+function PreviewCard({
+  input,
+  inputIndex,
+  onSaveShoes,
+}: {
+  input: HybridOSAppInput;
+  inputIndex: number;
+  onSaveShoes: (inputIndex: number, sessionId: string, shoes: string) => void;
+}) {
   const session = input.trainingSession;
   const topMuscles = getTopMuscles([session], 4);
   const exerciseCount = session.blocks.reduce((total, block) => total + block.exercises.length, 0);
+  const isPureRunning = isPureRunningSession(session);
+  const shoes = session.equipment?.shoes?.trim() ?? "";
+  const [isAddingShoes, setIsAddingShoes] = useState(false);
+  const [shoeDraft, setShoeDraft] = useState("");
+
+  function saveShoes() {
+    const nextShoes = shoeDraft.trim();
+
+    if (!nextShoes) {
+      return;
+    }
+
+    onSaveShoes(inputIndex, session.id, nextShoes);
+    setShoeDraft("");
+    setIsAddingShoes(false);
+  }
 
   return (
     <article className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-4">
@@ -563,6 +596,68 @@ function PreviewCard({ input }: { input: HybridOSAppInput }) {
           ))}
         </div>
       ) : null}
+      {isPureRunning && shoes ? (
+        <p className="mt-3 text-sm text-[var(--muted-strong)]">
+          Zapatillas: <span className="font-semibold text-[var(--foreground)]">{shoes}</span>
+        </p>
+      ) : null}
+      {isPureRunning && !shoes ? (
+        <div className="mt-3 rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-3">
+          <p className="text-sm font-semibold text-[var(--warning)]">
+            Zapatillas no indicadas. Esta sesión de running no podrá sumar volumen por modelo.
+          </p>
+          {isAddingShoes ? (
+            <form
+              className="mt-3 space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveShoes();
+              }}
+            >
+              <div>
+                <label htmlFor={`shoes-${session.id}`} className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  Modelo de zapatilla
+                </label>
+                <input
+                  id={`shoes-${session.id}`}
+                  type="text"
+                  value={shoeDraft}
+                  onChange={(event) => setShoeDraft(event.target.value)}
+                  placeholder="Puma Deviate Nitro 3"
+                  className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm text-[var(--foreground)] transition focus:border-[rgba(56,217,159,0.42)]"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  disabled={shoeDraft.trim().length === 0}
+                  className="rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent)] px-3 py-2 text-sm font-black text-[#06100c] transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Guardar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShoeDraft("");
+                    setIsAddingShoes(false);
+                  }}
+                  className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsAddingShoes(true)}
+              className="mt-3 rounded-md border border-[rgba(240,196,107,0.34)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--warning)] focus-visible:border-[var(--warning)]"
+            >
+              Añadir zapatillas
+            </button>
+          )}
+        </div>
+      ) : null}
       <div className="mt-3 flex flex-wrap gap-2">
         {session.pendingFields.length > 0 ? <Badge tone="warning">pendingFields {session.pendingFields.length}</Badge> : <Badge>sin pendientes</Badge>}
         {input.bodyCheck ? <Badge>body check incluido</Badge> : null}
@@ -585,7 +680,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
   const [saveError, setSaveError] = useState<SaveErrorState | null>(null);
   const [validation, setValidation] = useState<ValidationState>({
     status: "idle",
-    message: "Pega un HybridOSAppInput v1.0 o un array de inputs y valida el JSON.",
+    message: "Pega un HybridOSAppInput v1.0/v1.1 o un array de inputs y valida el JSON.",
     errors: [],
     warnings: [],
     duplicates: [],
@@ -687,6 +782,17 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
       warnings: [],
       duplicates: [],
     });
+  }
+
+  function addShoesToInput(inputIndex: number, sessionId: string, shoes: string) {
+    try {
+      const nextRawJson = addShoesToHybridOSJson(rawJson, inputIndex, sessionId, shoes, validation.repairedText);
+      setRawJson(nextRawJson);
+      validateJson(nextRawJson);
+      setSaveMessage(`Zapatillas añadidas: ${shoes}.`);
+    } catch {
+      setSaveMessage("No se pudo actualizar el JSON: valida o repara el input antes de añadir zapatillas.");
+    }
   }
 
   async function copyRepairedJson() {
@@ -867,7 +973,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
                 setRawJson("");
                 setSaveMessage(null);
                 setSaveError(null);
-                setValidation({ status: "idle", message: "Pega un HybridOSAppInput v1.0 o un array de inputs y valida el JSON.", errors: [], warnings: [], duplicates: [] });
+                setValidation({ status: "idle", message: "Pega un HybridOSAppInput v1.0/v1.1 o un array de inputs y valida el JSON.", errors: [], warnings: [], duplicates: [] });
               }}
               className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
             >
@@ -961,9 +1067,9 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
         ) : null}
         {validation.preview ? (
           <div className="mt-4 space-y-3">
-            {validation.preview.map((input) => (
+            {validation.preview.map((input, inputIndex) => (
               <div key={input.trainingSession.id} className="space-y-2">
-                <PreviewCard input={input} />
+                <PreviewCard input={input} inputIndex={inputIndex} onSaveShoes={addShoesToInput} />
               </div>
             ))}
             <details>

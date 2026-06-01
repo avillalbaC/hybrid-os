@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { saveAppInputs } from "@/lib/imports/save-app-input";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getAdminOwnerUserId } from "@/lib/supabase/admin-owner";
 import { isTrainingSessionsDatabaseConfigured } from "@/lib/supabase/training-sessions";
 import { historicalTrainingAppInputs } from "@/src/data/seed/realTrainingSessions";
 
@@ -138,9 +139,11 @@ async function main() {
     return;
   }
 
+  const ownerUserId = await getAdminOwnerUserId();
   const result = await saveAppInputs(historicalTrainingAppInputs, {
     duplicateMode: "skip",
     sourceLabel: "historical-seed-import",
+    userId: ownerUserId,
   });
 
   console.log("Historical seed import report");
