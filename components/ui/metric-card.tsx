@@ -1,3 +1,5 @@
+import { SkeletonBlock } from "@/components/ui/skeleton";
+
 export function MetricCard({
   label,
   value,
@@ -7,6 +9,8 @@ export function MetricCard({
   secondaryDelta,
   secondaryDeltaTone = "neutral",
   tone = "default",
+  state = "ready",
+  emptyLabel = "Sin datos del periodo",
 }: {
   label: string;
   value: string;
@@ -16,6 +20,8 @@ export function MetricCard({
   secondaryDelta?: string;
   secondaryDeltaTone?: "positive" | "negative" | "neutral";
   tone?: "default" | "strong";
+  state?: "loading" | "ready" | "empty";
+  emptyLabel?: string;
 }) {
   const getDeltaClassName = (value: "positive" | "negative" | "neutral") => ({
     positive: "border-[rgba(56,217,159,0.2)] bg-[rgba(56,217,159,0.08)] text-[var(--accent-strong)]",
@@ -32,14 +38,29 @@ export function MetricCard({
       }`}
     >
       <p className="text-[0.68rem] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">{label}</p>
-      <p className="mt-4 font-mono text-3xl font-black tracking-tight text-[var(--foreground)] sm:text-4xl">{value}</p>
-      {detail ? <p className="mt-3 text-sm leading-5 text-[var(--muted)]">{detail}</p> : null}
-      {delta ? (
+      {state === "loading" ? (
+        <div className="mt-4" aria-label={`${label}: calculando`}>
+          <SkeletonBlock className="h-10 w-28" />
+          <SkeletonBlock className="mt-3 h-4 w-40" />
+          <SkeletonBlock className="mt-4 h-7 w-24" />
+        </div>
+      ) : state === "empty" ? (
+        <>
+          <p className="mt-4 min-h-10 text-base font-bold leading-6 text-[var(--muted-strong)]">{emptyLabel}</p>
+          {detail ? <p className="mt-3 text-sm leading-5 text-[var(--muted)]">{detail}</p> : null}
+        </>
+      ) : (
+        <>
+          <p className="mt-4 font-mono text-3xl font-black tracking-tight text-[var(--foreground)] sm:text-4xl">{value}</p>
+          {detail ? <p className="mt-3 text-sm leading-5 text-[var(--muted)]">{detail}</p> : null}
+        </>
+      )}
+      {state === "ready" && delta ? (
         <p className={`mt-4 inline-flex rounded-md border px-2.5 py-1.5 font-mono text-xs font-black ${getDeltaClassName(deltaTone)}`}>
           {delta}
         </p>
       ) : null}
-      {secondaryDelta ? (
+      {state === "ready" && secondaryDelta ? (
         <p className={`mt-2 inline-flex rounded-md border px-2.5 py-1.5 font-mono text-[0.68rem] font-bold ${getDeltaClassName(secondaryDeltaTone)}`}>
           {secondaryDelta}
         </p>

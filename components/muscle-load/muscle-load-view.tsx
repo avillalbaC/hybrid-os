@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
 import { calculateExpectedProgress } from "@/lib/domain/dashboard/metrics";
 import { filterSessionsByPeriod, getLatestDate, getPeriodDetail, getPeriodTitle, resolvePeriodReferenceDate, type DashboardPeriod } from "@/lib/domain/dashboard/periods";
 import {
@@ -24,6 +25,7 @@ import {
   type MuscleGroupTotal,
   type MuscleLoadTotal,
 } from "@/lib/domain/training/muscle-load";
+import { isSecondaryActivity } from "@/lib/domain/training/secondary-activity";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
 import { formatDate, formatMuscleName, formatTrainingType } from "@/lib/utils/format";
 import type { MuscleName, TrainingSession } from "@/types/training";
@@ -301,18 +303,27 @@ function MuscleRanking({
 
 export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession[] }) {
   const [period, setPeriod] = useState<DashboardPeriod>("week");
+  const [isPeriodPending, setIsPeriodPending] = useState(false);
   const [showFullRanking, setShowFullRanking] = useState(false);
   const [showAllSessions, setShowAllSessions] = useState(false);
-  const { sessions, pendingSessions, source, syncMessage } = useTrainingSessions(seedSessions);
+  const [includeSecondaryActivities, setIncludeSecondaryActivities] = useState(true);
+  const { sessions, pendingSessions, source, syncMessage, isLoading, isReady } = useTrainingSessions(seedSessions);
   const periodSessions = useMemo(() => filterSessionsByPeriod(sessions, period), [period, sessions]);
-  const muscleSummary = useMemo(() => calculateMuscleSummary(periodSessions), [periodSessions]);
+  const primarySessions = useMemo(() => periodSessions.filter((session) => !isSecondaryActivity(session)), [periodSessions]);
+  const analysisSessions = includeSecondaryActivities ? periodSessions : primarySessions;
+  const referenceSessions = useMemo(
+    () => (includeSecondaryActivities ? sessions : sessions.filter((session) => !isSecondaryActivity(session))),
+    [includeSecondaryActivities, sessions],
+  );
+  const excludedSecondaryCount = periodSessions.length - primarySessions.length;
+  const muscleSummary = useMemo(() => calculateMuscleSummary(analysisSessions), [analysisSessions]);
   const ranking = useMemo(() => getTopMuscles(muscleSummary, 100), [muscleSummary]);
   const underusedMuscles = useMemo(() => getUnderusedMuscles(muscleSummary, 12), [muscleSummary]);
   const leastLoadedMuscles = useMemo(() => getLeastLoadedMuscles(muscleSummary, 5), [muscleSummary]);
   const groups = useMemo(() => calculateMuscleGroups(muscleSummary), [muscleSummary]);
   const ratioGroups = useMemo(() => getRatioGroups(groups), [groups]);
-  const topSessions = useMemo(() => getTopSessions(periodSessions), [periodSessions]);
-  const runningDistanceMeters = periodSessions.reduce((total, session) => total + session.sessionMetrics.totalRunMeters, 0);
+  const topSessions = useMemo(() => getTopSessions(analysisSessions), [analysisSessions]);
+  const runningDistanceMeters = analysisSessions.reduce((total, session) => total + session.sessionMetrics.totalRunMeters, 0);
   const periodReading = useMemo(
     () => getPeriodReading(ranking, groups, runningDistanceMeters),
     [ranking, groups, runningDistanceMeters],
@@ -324,9 +335,9 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
   const displayAlerts = useMemo(() => getDisplayAlerts(alerts), [alerts]);
   const secondaryRecommendation = useMemo(() => getSecondaryRecommendation(displayAlerts), [displayAlerts]);
   const totalLoad = getMuscleLoadTotal(muscleSummary);
-  const referenceDate = resolvePeriodReferenceDate(period, getLatestDate(sessions));
+  const referenceDate = resolvePeriodReferenceDate(period, getLatestDate(referenceSessions));
   const loadProgress = calculateExpectedProgress({
-    items: sessions,
+    items: referenceSessions,
     period,
     referenceDate,
     currentValue: totalLoad,
@@ -344,6 +355,28 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
   const visibleRanking = showFullRanking ? ranking : ranking.slice(0, 8);
   const visibleTopSessions = showAllSessions ? topSessions : topSessions.slice(0, 3);
   const dominantMuscleName = ranking[0] ? formatMuscleName(ranking[0].muscle) : "Sin carga";
+  const isMetricsLoading = isLoading || !isReady || isPeriodPending;
+  const totalLoadState = isMetricsLoading ? "loading" : totalLoad > 0 ? "ready" : "empty";
+  const maxLoadState = isMetricsLoading ? "loading" : maxLoad > 0 ? "ready" : "empty";
+  const ratioState = isMetricsLoading ? "loading" : totalLoad > 0 ? "ready" : "empty";
+  const handlePeriodChange = (nextPeriod: DashboardPeriod) => {
+    if (nextPeriod === period) {
+      return;
+    }
+
+    setIsPeriodPending(true);
+    setPeriod(nextPeriod);
+  };
+
+  useEffect(() => {
+    if (!isPeriodPending || isLoading || !isReady) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => setIsPeriodPending(false));
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isLoading, isPeriodPending, isReady, period]);
 
   return (
     <>
@@ -360,8 +393,20 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
           </Badge>
           {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
           <Badge>{getPeriodDetail(period)}</Badge>
+          <Badge>{includeSecondaryActivities ? "Carga total real" : "Solo entrenamiento principal"}</Badge>
         </div>
-        <PeriodSelector value={period} onChange={setPeriod} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <label className="inline-flex min-h-11 items-center gap-3 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)]">
+            <input
+              type="checkbox"
+              checked={includeSecondaryActivities}
+              onChange={(event) => setIncludeSecondaryActivities(event.target.checked)}
+              className="h-4 w-4 accent-[var(--accent)]"
+            />
+            Incluir actividades secundarias
+          </label>
+          <PeriodSelector value={period} onChange={handlePeriodChange} />
+        </div>
       </section>
 
       {syncMessage ? (
@@ -371,17 +416,54 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
       ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Carga total" value={`${totalLoad}`} detail={`${periodSessions.length} sesiones en el periodo`} delta={loadProgress.label} deltaTone={loadProgress.tone} tone="strong" />
-        <MetricCard label="Máximo del periodo" value={`${maxLoad}`} detail={`${dominantMuscleName} · músculo dominante`} tone="strong" />
-        <MetricCard label="Tren inferior" value={`${lowerBodyPercent}%`} detail={`${lowerBody?.load ?? 0} puntos · ${lowerBodyPercent}% de carga`} />
-        <MetricCard label="Tren superior" value={`${upperBodyPercent}%`} detail={`${upperBody?.load ?? 0} puntos · ${upperBodyPercent}% de carga`} />
-        <MetricCard label="Core/lumbar" value={`${corePercent}%`} detail={`${coreGroup?.load ?? 0} puntos · ${corePercent}% de carga`} />
+        <MetricCard
+          label="Carga total"
+          value={`${totalLoad}`}
+          detail={`${analysisSessions.length} sesiones analizadas${includeSecondaryActivities ? "" : ` · ${excludedSecondaryCount} secundarias fuera`}`}
+          delta={loadProgress.label}
+          deltaTone={loadProgress.tone}
+          tone="strong"
+          state={totalLoadState}
+        />
+        <MetricCard label="Máximo del periodo" value={`${maxLoad}`} detail={`${dominantMuscleName} · músculo dominante`} tone="strong" state={maxLoadState} />
+        <MetricCard label="Tren inferior" value={`${lowerBodyPercent}%`} detail={`${lowerBody?.load ?? 0} puntos · ${lowerBodyPercent}% de carga`} state={ratioState} />
+        <MetricCard label="Tren superior" value={`${upperBodyPercent}%`} detail={`${upperBody?.load ?? 0} puntos · ${upperBodyPercent}% de carga`} state={ratioState} />
+        <MetricCard label="Core/lumbar" value={`${corePercent}%`} detail={`${coreGroup?.load ?? 0} puntos · ${corePercent}% de carga`} state={ratioState} />
       </section>
 
-      {totalLoad <= 0 ? (
+      {isMetricsLoading ? (
+        <section className="mt-7 grid gap-5 lg:grid-cols-2" aria-label="Carga muscular calculando">
+          <Card>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Lectura del periodo</p>
+            <div className="mt-4">
+              <SkeletonText lines={3} />
+            </div>
+          </Card>
+          <Card>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Acción recomendada</p>
+            <SkeletonBlock className="mt-4 h-7 w-3/4" />
+            <SkeletonBlock className="mt-3 h-4 w-full" />
+          </Card>
+          <Card>
+            <SkeletonBlock className="h-6 w-48" />
+            <div className="mt-5 space-y-3">
+              <SkeletonBlock className="h-14 w-full" />
+              <SkeletonBlock className="h-14 w-full" />
+              <SkeletonBlock className="h-14 w-full" />
+            </div>
+          </Card>
+          <Card>
+            <SkeletonBlock className="h-6 w-36" />
+            <div className="mt-5 space-y-3">
+              <SkeletonBlock className="h-16 w-full" />
+              <SkeletonBlock className="h-16 w-full" />
+            </div>
+          </Card>
+        </section>
+      ) : totalLoad <= 0 ? (
         <section className="mt-6">
           <Card>
-            <p className="text-sm leading-6 text-[var(--muted)]">No hay datos de carga muscular para este periodo.</p>
+            <p className="text-sm leading-6 text-[var(--muted)]">Sin datos del periodo.</p>
           </Card>
         </section>
       ) : (

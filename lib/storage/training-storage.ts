@@ -1,4 +1,5 @@
 import type { HybridOSAppInput, TrainingSession } from "@/types/training";
+import type { ValidationIssue } from "@/lib/validation/hybrid-os-input";
 
 const STORAGE_KEY = "hybrid-os.training-sessions";
 const DELETED_IDS_STORAGE_KEY = "hybrid-os.deleted-training-session-ids";
@@ -201,10 +202,26 @@ export async function saveRemoteTrainingSession(session: TrainingSession) {
 
 export type RemoteAppInputImportResult = {
   ok: true;
+  dryRun?: false;
   savedSessionIds: string[];
   savedExercises: number;
   savedBodyCheckIds: string[];
   savedNutritionCheckIds: string[];
+  phases?: string[];
+};
+
+export type RemoteAppInputDryRunResult = {
+  ok: true;
+  dryRun: true;
+  wouldImport: number;
+  duplicates: string[];
+  warnings: ValidationIssue[];
+  phases: string[];
+  wouldSaveSessionIds: string[];
+  wouldSaveExercises: number;
+  wouldSaveBodyCheckIds: string[];
+  wouldSaveNutritionCheckIds: string[];
+  skippedInvalidStatus: Array<{ id: string; status: TrainingSession["status"] }>;
 };
 
 export type RemoteAppInputImportErrorDetail = {
@@ -240,8 +257,8 @@ export class RemoteAppInputImportError extends Error {
   }
 }
 
-export async function saveRemoteAppInputs(inputs: HybridOSAppInput[]): Promise<RemoteAppInputImportResult> {
-  const response = await fetch("/api/imports", {
+async function postRemoteAppInputs(inputs: HybridOSAppInput[], options: { dryRun: boolean }) {
+  const response = await fetch(options.dryRun ? "/api/imports?dryRun=true" : "/api/imports", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -269,9 +286,17 @@ export async function saveRemoteAppInputs(inputs: HybridOSAppInput[]): Promise<R
     );
   }
 
-  const payload = (await response.json()) as RemoteAppInputImportResult;
+  return response.json() as Promise<RemoteAppInputImportResult | RemoteAppInputDryRunResult>;
+}
+
+export async function saveRemoteAppInputs(inputs: HybridOSAppInput[]): Promise<RemoteAppInputImportResult> {
+  const payload = await postRemoteAppInputs(inputs, { dryRun: false }) as RemoteAppInputImportResult;
   window.dispatchEvent(new Event("hybrid-os:remote-training-sessions-updated"));
   return payload;
+}
+
+export async function dryRunRemoteAppInputs(inputs: HybridOSAppInput[]): Promise<RemoteAppInputDryRunResult> {
+  return postRemoteAppInputs(inputs, { dryRun: true }) as Promise<RemoteAppInputDryRunResult>;
 }
 
 export async function deleteRemoteTrainingSession(id: string) {

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { PageHeader } from "@/components/ui/page-header";
+import { SkeletonBlock } from "@/components/ui/skeleton";
 import {
   getCurrentRunningPeriods,
   getRunningContextTotals,
@@ -108,8 +109,28 @@ function EmptyState({ title, description }: { title: string; description: string
   );
 }
 
+function ComparisonSkeleton() {
+  return (
+    <div className="mt-4 grid gap-3 sm:grid-cols-3" aria-label="Comparación semanal calculando">
+      <SkeletonBlock className="h-28" />
+      <SkeletonBlock className="h-28" />
+      <SkeletonBlock className="h-28" />
+    </div>
+  );
+}
+
+function RunningTableSkeleton() {
+  return (
+    <div className="mt-4 space-y-3" aria-label="Sesiones running calculando">
+      <SkeletonBlock className="h-14 w-full" />
+      <SkeletonBlock className="h-14 w-full" />
+      <SkeletonBlock className="h-14 w-full" />
+    </div>
+  );
+}
+
 export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSession[] }) {
-  const { sessions, pendingSessions, source, syncMessage } = useTrainingSessions(seedSessions);
+  const { sessions, pendingSessions, source, syncMessage, isLoading, isReady } = useTrainingSessions(seedSessions);
   const runningRows = getRunningSessionRows(sessions);
   const periods = getCurrentRunningPeriods(runningRows);
   const historicalStats = summarizeRunning(runningRows);
@@ -117,13 +138,19 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
   const shoeVolumes = getRunningShoeVolumes(runningRows);
   const weeklySummaries = groupRunningByCalendarWeek(runningRows, 12);
   const maxWeeklyMeters = Math.max(...weeklySummaries.map((week) => week.runMeters), 1);
+  const isMetricsLoading = isLoading || !isReady;
+  const weekKmState = isMetricsLoading ? "loading" : periods.week.runMeters > 0 ? "ready" : "empty";
+  const monthKmState = isMetricsLoading ? "loading" : periods.month.runMeters > 0 ? "ready" : "empty";
+  const sessionsState = isMetricsLoading ? "loading" : historicalStats.sessions > 0 ? "ready" : "empty";
+  const durationState = isMetricsLoading ? "loading" : historicalStats.durationMinutes && historicalStats.durationMinutes > 0 ? "ready" : "empty";
+  const rpeState = isMetricsLoading ? "loading" : historicalStats.averageRpe ? "ready" : "empty";
 
   return (
     <>
       <PageHeader
         eyebrow="Running"
         title="Evolución de carrera"
-        description="Kilómetros, sesiones, duración, ritmo y contexto de carrera con Supabase como fuente principal."
+        description="Kilómetros, sesiones, duración y ritmo de sesiones con type running. HYROX, CrossFit y actividades secundarias quedan fuera de este análisis."
       />
 
       <section className="mb-5 flex flex-wrap gap-2">
@@ -142,11 +169,12 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
           delta={formatDelta(periods.week.runMeters, periods.previousWeek.runMeters, formatKm)}
           deltaTone={getDeltaTone(periods.week.runMeters, periods.previousWeek.runMeters)}
           tone="strong"
+          state={weekKmState}
         />
-        <MetricCard label="Km mes actual" value={formatKm(periods.month.runMeters)} detail="Mes natural" tone="strong" />
-        <MetricCard label="Sesiones running" value={`${historicalStats.sessions}`} detail="Histórico con carrera" />
-        <MetricCard label="Duración running" value={formatDuration(historicalStats.durationMinutes)} detail="Histórico con dato" />
-        <MetricCard label="RPE medio running" value={historicalStats.averageRpe ? `${historicalStats.averageRpe}` : "Sin dato"} detail="Sesiones con RPE" />
+        <MetricCard label="Km mes actual" value={formatKm(periods.month.runMeters)} detail="Mes natural" tone="strong" state={monthKmState} />
+        <MetricCard label="Sesiones running" value={`${historicalStats.sessions}`} detail="Histórico con carrera" state={sessionsState} />
+        <MetricCard label="Duración running" value={formatDuration(historicalStats.durationMinutes)} detail="Histórico con dato" state={durationState} />
+        <MetricCard label="RPE medio running" value={historicalStats.averageRpe ? `${historicalStats.averageRpe}` : "Sin dato"} detail="Sesiones con RPE" state={rpeState} />
       </section>
 
       <section className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px]">
@@ -159,6 +187,9 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
               </div>
               <Badge tone="neutral">lunes-domingo</Badge>
             </div>
+            {isMetricsLoading ? (
+              <ComparisonSkeleton />
+            ) : (
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <ComparisonCard label="Km" current={periods.week.runMeters} previous={periods.previousWeek.runMeters} formatter={formatKm} />
               <ComparisonCard label="Sesiones" current={periods.week.sessions} previous={periods.previousWeek.sessions} formatter={(value) => `${value}`} />
@@ -169,23 +200,23 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
                 formatter={(value) => formatDuration(value)}
               />
             </div>
+            )}
           </Card>
 
           <Card>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold">Sesiones running</h3>
-                <p className="mt-1 text-sm text-[var(--muted)]">Carrera pura y metros de carrera dentro de HYROX/CrossFit.</p>
+                <p className="mt-1 text-sm text-[var(--muted)]">Solo sesiones registradas como type running.</p>
               </div>
               <Badge tone="accent">{runningRows.length} sesiones</Badge>
             </div>
 
-            {runningRows.length === 0 ? (
+            {isMetricsLoading ? (
+              <RunningTableSkeleton />
+            ) : runningRows.length === 0 ? (
               <div className="mt-5">
-                <EmptyState
-                  title="Sin sesiones de running"
-                  description="Cuando haya sesiones con distancia de carrera, aparecerán aquí con ritmo, duración, FC media y RPE."
-                />
+                <EmptyState title="Sin sesiones de running" description="Cuando haya sesiones type running, aparecerán aquí con ritmo, duración, FC media y RPE." />
               </div>
             ) : (
               <div className="mt-4 overflow-x-auto">
@@ -227,23 +258,35 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
 
         <aside className="space-y-5">
           <Card>
-            <h3 className="text-lg font-semibold">Tipo de carrera</h3>
-            {historicalStats.runMeters === 0 ? (
+            <h3 className="text-lg font-semibold">Alcance del análisis</h3>
+            {isMetricsLoading ? (
+              <div className="mt-4 space-y-3" aria-label="Tipo de carrera calculando">
+                <SkeletonBlock className="h-12 w-full" />
+                <SkeletonBlock className="h-12 w-full" />
+                <SkeletonBlock className="h-12 w-full" />
+              </div>
+            ) : historicalStats.runMeters === 0 ? (
               <div className="mt-4">
                 <EmptyState title="Sin distribución" description="La separación se activa cuando existe distancia de carrera en las sesiones." />
               </div>
             ) : (
               <dl className="mt-4 space-y-3">
-                <StatLine label="Running puro" value={formatKm(contextTotals.pure)} />
-                <StatLine label="HYROX/CrossFit" value={formatKm(contextTotals["hyrox-crossfit"])} />
-                <StatLine label="Mixto / otros" value={formatKm(contextTotals.mixed)} />
+                <StatLine label="Incluido: type running" value={formatKm(contextTotals.pure)} />
+                <StatLine label="Excluido: HYROX/CrossFit" value={formatKm(contextTotals["hyrox-crossfit"])} />
+                <StatLine label="Excluido: secundarios/mixtos" value={formatKm(contextTotals.mixed)} />
               </dl>
             )}
           </Card>
 
           <Card>
             <h3 className="text-lg font-semibold">Km por semana</h3>
-            {weeklySummaries.length === 0 ? (
+            {isMetricsLoading ? (
+              <div className="mt-5 space-y-4" aria-label="Tendencia semanal calculando">
+                <SkeletonBlock className="h-8 w-full" />
+                <SkeletonBlock className="h-8 w-full" />
+                <SkeletonBlock className="h-8 w-full" />
+              </div>
+            ) : weeklySummaries.length === 0 ? (
               <div className="mt-4">
                 <EmptyState title="Sin tendencia semanal" description="Aparecerá una barra por cada semana calendario con metros de carrera." />
               </div>
@@ -271,7 +314,12 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
 
           <Card>
             <h3 className="text-lg font-semibold">Volumen por zapatilla</h3>
-            {shoeVolumes.length === 0 ? (
+            {isMetricsLoading ? (
+              <div className="mt-4 space-y-3" aria-label="Volumen por zapatilla calculando">
+                <SkeletonBlock className="h-12 w-full" />
+                <SkeletonBlock className="h-12 w-full" />
+              </div>
+            ) : shoeVolumes.length === 0 ? (
               <div className="mt-4">
                 <EmptyState title="Sin sesiones de running puro" description="El volumen por modelo solo suma sesiones con type running." />
               </div>

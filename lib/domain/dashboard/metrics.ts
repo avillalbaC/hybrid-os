@@ -9,6 +9,7 @@ import {
   getCompletedSessions,
   type MuscleTotal,
 } from "@/lib/selectors/training";
+import { isPureRunningSession } from "@/lib/domain/training/session-kind";
 import {
   type DashboardPeriod,
   type PeriodRange,
@@ -165,7 +166,7 @@ function getAverageNutritionAdherence(items: NutritionCheck[]) {
 }
 
 function getRunningSessionCount(sessions: TrainingSession[]) {
-  return sessions.filter((session) => session.sessionMetrics.totalRunMeters > 0).length;
+  return sessions.filter(isPureRunningSession).length;
 }
 
 function calculateDashboardAlerts({

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/layout/app-shell";
+import { isDevAuthBypassEnabled } from "@/lib/auth/dev-auth-bypass";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
@@ -14,10 +15,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const devAuthBypassEnabled = isDevAuthBypassEnabled();
+
   return (
     <html lang="es">
       <body>
-        <AppShell>{children}</AppShell>
+        <AppShell devAuthBypassEnabled={devAuthBypassEnabled}>{children}</AppShell>
       </body>
     </html>
   );

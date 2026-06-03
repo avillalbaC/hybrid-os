@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { SkeletonBlock } from "@/components/ui/skeleton";
 import Link from "next/link";
 import type { TrainingMixRow, TrainingMixTrend } from "@/lib/domain/training/training-mix";
 
@@ -28,11 +29,13 @@ export function TrainingMixCard({
   density = "detailed",
   actionHref,
   actionLabel = "Ver detalle",
+  state = "ready",
 }: {
   rows: TrainingMixRow[];
   density?: "compact" | "detailed";
   actionHref?: string;
   actionLabel?: string;
+  state?: "loading" | "ready" | "empty";
 }) {
   const isCompact = density === "compact";
   const visibleRows = isCompact ? rows.slice(0, 6) : rows;
@@ -55,6 +58,27 @@ export function TrainingMixCard({
         )}
       </div>
 
+      {state === "loading" ? (
+        <div className={`mt-5 grid gap-3 ${isCompact ? "md:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-3"}`} aria-label="Training Mix calculando">
+          {Array.from({ length: isCompact ? 4 : 6 }).map((_, index) => (
+            <div key={index} className={`rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] ${isCompact ? "p-3" : "p-4"}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="w-full">
+                  <SkeletonBlock className="h-4 w-24" />
+                  <SkeletonBlock className="mt-2 h-3 w-20" />
+                </div>
+                <SkeletonBlock className="h-7 w-20 shrink-0" />
+              </div>
+              <SkeletonBlock className="mt-4 h-8 w-16" />
+              <SkeletonBlock className="mt-4 h-2 w-full rounded-full" />
+            </div>
+          ))}
+        </div>
+      ) : state === "empty" || visibleRows.length === 0 ? (
+        <div className="mt-5 rounded-md border border-dashed border-[var(--line-strong)] bg-[rgba(244,247,244,0.025)] p-5 text-sm leading-6 text-[var(--muted)]">
+          Sin sesiones en este periodo.
+        </div>
+      ) : (
       <div className={`mt-5 grid gap-3 ${isCompact ? "md:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-3"}`}>
         {visibleRows.map((row) => (
           <article key={row.modality} className={`rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] ${isCompact ? "p-3" : "p-4"}`}>
@@ -81,7 +105,7 @@ export function TrainingMixCard({
               <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
                 <div className="rounded-md border border-[var(--line)] p-2">
                   <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Ritmo esperado</p>
-                  <p className="mt-1 font-mono font-black">{row.expectedWeekSessions === null ? "-" : formatAverage(row.expectedWeekSessions)}</p>
+                  <p className="mt-1 font-mono font-black">{row.expectedWeekSessions === null ? "Sin referencia" : formatAverage(row.expectedWeekSessions)}</p>
                 </div>
                 <div className="rounded-md border border-[var(--line)] p-2">
                   <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Referencia</p>
@@ -93,6 +117,7 @@ export function TrainingMixCard({
           </article>
         ))}
       </div>
+      )}
     </Card>
   );
 }

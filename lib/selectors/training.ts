@@ -7,6 +7,7 @@ import type {
   WeeklyMuscleBalance,
   WeeklyTrainingLoad,
 } from "@/types/training";
+import { isPureRunningSession } from "@/lib/domain/training/session-kind";
 
 export const muscleNames: MuscleName[] = [
   "quadriceps",
@@ -56,7 +57,9 @@ export function getAverageRpe(sessions: TrainingSession[]) {
 }
 
 export function calculateWeeklyRunningVolume(sessions: TrainingSession[]) {
-  return sessions.reduce((total, session) => total + session.sessionMetrics.totalRunMeters, 0);
+  return sessions
+    .filter(isPureRunningSession)
+    .reduce((total, session) => total + session.sessionMetrics.totalRunMeters, 0);
 }
 
 export function getRunningKm(sessions: TrainingSession[]) {

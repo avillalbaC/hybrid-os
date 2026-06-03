@@ -117,11 +117,17 @@ export function formatTag(tag: string) {
     "lower-body": "Tren inferior",
     metcon: "Metcon",
     "compromised running": "Running con fatiga",
+    hiking: "Senderismo",
+    padel: "Pádel",
+    "racket-sport": "Deporte de raqueta",
     recovery: "Recuperación",
+    route: "Ruta",
+    "secondary-activity": "Actividad secundaria",
     sled: "Trineo",
     strength: "Fuerza",
     technique: "Técnica",
     upper: "Tren superior",
+    walking: "Walking",
     "zone-2": "Zona 2",
   };
 

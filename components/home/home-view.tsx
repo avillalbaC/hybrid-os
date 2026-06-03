@@ -6,8 +6,10 @@ import { TrainingMixCard } from "@/components/home/training-mix-card";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
+import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
 import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
 import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
+import { secondaryActivityKindLabels, summarizeSecondaryActivities, type SecondaryActivitySummary } from "@/lib/domain/training/secondary-activity";
 import { calculateTrainingMix, type TrainingModality } from "@/lib/domain/training/training-mix";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
 import { formatDataQuality, formatDate, formatMuscleName, formatTrainingType } from "@/lib/utils/format";
@@ -236,7 +238,7 @@ function getNextAction({
 function LatestSessionCard({ session }: { session: TrainingSession }) {
   const runningKm = session.sessionMetrics.totalRunMeters > 0
     ? `${(session.sessionMetrics.totalRunMeters / 1000).toFixed(1)} km`
-    : "-";
+    : "Sin dato";
 
   return (
     <Link
@@ -252,11 +254,11 @@ function LatestSessionCard({ session }: { session: TrainingSession }) {
       <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
         <div className="rounded-md border border-[var(--line)] p-2">
           <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Duración</p>
-          <p className="mt-1 font-mono font-black">{session.durationMinutes ?? "-"}m</p>
+          <p className="mt-1 font-mono font-black">{session.durationMinutes ? `${session.durationMinutes}m` : "Sin dato"}</p>
         </div>
         <div className="rounded-md border border-[var(--line)] p-2">
           <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">RPE</p>
-          <p className="mt-1 font-mono font-black">{session.rpe ?? "-"}/10</p>
+          <p className="mt-1 font-mono font-black">{session.rpe ? `${session.rpe}/10` : "Sin dato"}</p>
         </div>
         <div className="rounded-md border border-[var(--line)] p-2">
           <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Running</p>
@@ -268,13 +270,41 @@ function LatestSessionCard({ session }: { session: TrainingSession }) {
   );
 }
 
-function WatchCard({ signals }: { signals: WatchSignal[] }) {
+function LatestSessionSkeleton() {
+  return (
+    <div className="mt-4 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-4" aria-label="Último entrenamiento calculando">
+      <div className="flex flex-wrap items-center gap-2">
+        <SkeletonBlock className="h-5 w-24" />
+        <SkeletonBlock className="h-6 w-20" />
+      </div>
+      <SkeletonBlock className="mt-4 h-6 w-4/5" />
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <SkeletonBlock className="h-14" />
+        <SkeletonBlock className="h-14" />
+        <SkeletonBlock className="h-14" />
+      </div>
+    </div>
+  );
+}
+
+function WatchCard({
+  isLoading,
+  signals,
+}: {
+  isLoading?: boolean;
+  signals: WatchSignal[];
+}) {
   return (
     <Card>
       <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Qué vigilar</p>
       <h3 className="mt-2 text-xl font-black tracking-tight">Señales principales</h3>
       <div className="mt-4 space-y-3 text-sm leading-6 text-[var(--muted)]">
-        {signals.length > 0 ? (
+        {isLoading ? (
+          <>
+            <SkeletonBlock className="h-16 w-full" />
+            <SkeletonBlock className="h-16 w-full" />
+          </>
+        ) : signals.length > 0 ? (
           signals.map((signal) => (
             <p
               key={signal.title}
@@ -300,29 +330,49 @@ function WatchCard({ signals }: { signals: WatchSignal[] }) {
   );
 }
 
-function NextActionCard({ action }: { action: NextAction }) {
+function NextActionCard({
+  action,
+  isLoading,
+}: {
+  action: NextAction;
+  isLoading?: boolean;
+}) {
   return (
     <Card className={action.tone === "warning" ? "border-[rgba(240,196,107,0.26)]" : ""}>
       <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Próxima acción</p>
-      <h3 className="mt-2 text-2xl font-black tracking-tight">{action.title}</h3>
-      <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{action.detail}</p>
-      <Link
-        href={action.href}
-        className={`mt-5 inline-flex min-h-11 items-center justify-center rounded-md border px-4 py-2 text-sm font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${
-          action.tone === "warning"
-            ? "border-[rgba(240,196,107,0.34)] bg-[var(--warning-soft)] text-[var(--warning)] hover:border-[rgba(240,196,107,0.5)]"
-            : "border-[rgba(56,217,159,0.34)] bg-[var(--accent)] text-[#06100c] hover:bg-[var(--accent-strong)]"
-        }`}
-      >
-        {action.label}
-      </Link>
+      {isLoading ? (
+        <div className="mt-3" aria-label="Próxima acción calculando">
+          <SkeletonBlock className="h-8 w-3/4" />
+          <div className="mt-4">
+            <SkeletonText lines={2} />
+          </div>
+          <SkeletonBlock className="mt-5 h-11 w-32" />
+        </div>
+      ) : (
+        <>
+          <h3 className="mt-2 text-2xl font-black tracking-tight">{action.title}</h3>
+          <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{action.detail}</p>
+          <Link
+            href={action.href}
+            className={`mt-5 inline-flex min-h-11 items-center justify-center rounded-md border px-4 py-2 text-sm font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${
+              action.tone === "warning"
+                ? "border-[rgba(240,196,107,0.34)] bg-[var(--warning-soft)] text-[var(--warning)] hover:border-[rgba(240,196,107,0.5)]"
+                : "border-[rgba(56,217,159,0.34)] bg-[var(--accent)] text-[#06100c] hover:bg-[var(--accent-strong)]"
+            }`}
+          >
+            {action.label}
+          </Link>
+        </>
+      )}
     </Card>
   );
 }
 
 function MuscleSummaryCard({
+  isLoading,
   muscles,
 }: {
+  isLoading?: boolean;
   muscles: { muscle: MuscleName; loadScore: number }[];
 }) {
   return (
@@ -337,7 +387,13 @@ function MuscleSummaryCard({
         </Link>
       </div>
       <div className="mt-4 space-y-2">
-        {muscles.length > 0 ? (
+        {isLoading ? (
+          <>
+            <SkeletonBlock className="h-10 w-full" />
+            <SkeletonBlock className="h-10 w-full" />
+            <SkeletonBlock className="h-10 w-full" />
+          </>
+        ) : muscles.length > 0 ? (
           muscles.map((item) => (
             <div key={item.muscle} className="flex items-center justify-between rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-3 py-2 text-sm">
               <span className="font-semibold text-[var(--foreground)]">{formatMuscleName(item.muscle)}</span>
@@ -345,9 +401,90 @@ function MuscleSummaryCard({
             </div>
           ))
         ) : (
-          <p className="text-sm leading-6 text-[var(--muted)]">Sin carga acumulada esta semana.</p>
+          <p className="text-sm leading-6 text-[var(--muted)]">Sin datos del periodo.</p>
         )}
       </div>
+    </Card>
+  );
+}
+
+function HeroMetricValue({
+  isLoading,
+  isEmpty,
+  value,
+}: {
+  isLoading: boolean;
+  isEmpty: boolean;
+  value: string;
+}) {
+  if (isLoading) {
+    return <SkeletonBlock className="mt-2 h-8 w-20" />;
+  }
+
+  if (isEmpty) {
+    return <p className="mt-2 text-sm font-bold leading-5 text-[var(--muted-strong)]">Sin datos</p>;
+  }
+
+  return <p className="mt-2 whitespace-nowrap font-mono text-2xl font-black">{value}</p>;
+}
+
+function formatDurationLabel(minutes: number) {
+  if (minutes <= 0) {
+    return "0 min";
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  if (hours === 0) {
+    return `${remainingMinutes} min`;
+  }
+
+  return `${hours} h ${String(remainingMinutes).padStart(2, "0")} min`;
+}
+
+function SecondaryActivityCard({
+  isLoading,
+  summary,
+}: {
+  isLoading?: boolean;
+  summary: SecondaryActivitySummary;
+}) {
+  const topKinds = summary.topKinds.slice(0, 3).map((kind) => secondaryActivityKindLabels[kind]).join(" · ");
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Actividad secundaria</p>
+          <h3 className="mt-2 text-xl font-black tracking-tight">Complemento semanal</h3>
+        </div>
+        <Link href="/training?filter=secondary" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+          Ver log
+        </Link>
+      </div>
+      {isLoading ? (
+        <div className="mt-4 space-y-3" aria-label="Actividad secundaria calculando">
+          <SkeletonBlock className="h-10 w-full" />
+          <SkeletonBlock className="h-10 w-full" />
+        </div>
+      ) : summary.sessions > 0 ? (
+        <>
+          <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
+              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Sesiones</dt>
+              <dd className="mt-1 font-mono text-lg font-black">{summary.sessions}</dd>
+            </div>
+            <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
+              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Duración</dt>
+              <dd className="mt-1 font-mono text-lg font-black">{formatDurationLabel(summary.durationMinutes)}</dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">{topKinds || "Sin tipo dominante"}</p>
+        </>
+      ) : (
+        <p className="mt-4 text-sm leading-6 text-[var(--muted)]">Sin actividad secundaria esta semana.</p>
+      )}
     </Card>
   );
 }
@@ -381,9 +518,10 @@ export function HomeView({
   bodyChecks: BodyCheck[];
   nutritionChecks: NutritionCheck[];
 }) {
-  const { sessions: combinedSessions, pendingSessions, source, syncMessage } = useTrainingSessions(sessions);
+  const { sessions: combinedSessions, pendingSessions, source, syncMessage, isLoading, isReady } = useTrainingSessions(sessions);
   const metrics = calculateDashboardMetrics(combinedSessions, bodyChecks, nutritionChecks, "week");
   const { currentWeekSessions } = useMemo(() => getLatestWeekSessions(combinedSessions), [combinedSessions]);
+  const secondaryActivitySummary = useMemo(() => summarizeSecondaryActivities(currentWeekSessions), [currentWeekSessions]);
   const trainingMix = useMemo(() => calculateTrainingMix(combinedSessions), [combinedSessions]);
   const latestSession = metrics.recentSessions[0] ?? null;
   const miniMixRows = miniMixOrder
@@ -409,6 +547,15 @@ export function HomeView({
     averageRpe: metrics.averageRpe.value,
     alertCount: watchSignals.length,
   });
+  const isMetricsLoading = isLoading || !isReady;
+  const hasWeekSessions = (metrics.sessions.value ?? 0) > 0;
+  const sessionsState = isMetricsLoading ? "loading" : hasWeekSessions ? "ready" : "empty";
+  const runningState = isMetricsLoading ? "loading" : (metrics.runningKm.value ?? 0) > 0 ? "ready" : "empty";
+  const durationState = isMetricsLoading ? "loading" : (metrics.durationMinutes.value ?? 0) > 0 ? "ready" : "empty";
+  const rpeState = isMetricsLoading ? "loading" : metrics.averageRpe.value !== null ? "ready" : "empty";
+  const weeklyReadingText = isMetricsLoading
+    ? "Calculando métricas semanales con la fuente final de entrenamiento."
+    : weeklyReading;
 
   return (
     <>
@@ -420,20 +567,20 @@ export function HomeView({
               <h2 className="max-w-3xl text-4xl font-black tracking-tight text-[var(--foreground)] sm:text-5xl">
                 Estado actual.
               </h2>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">{weeklyReading}</p>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">{weeklyReadingText}</p>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:min-w-[320px] sm:grid-cols-3">
               <div className="rounded-md border border-[rgba(244,247,244,0.12)] bg-[rgba(244,247,244,0.035)] p-3">
                 <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Sesiones</p>
-                <p className="mt-2 whitespace-nowrap font-mono text-2xl font-black">{metrics.sessions.formattedValue}</p>
+                <HeroMetricValue isLoading={isMetricsLoading} isEmpty={!hasWeekSessions} value={metrics.sessions.formattedValue} />
               </div>
               <div className="rounded-md border border-[rgba(244,247,244,0.12)] bg-[rgba(244,247,244,0.035)] p-3">
                 <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Running</p>
-                <p className="mt-2 whitespace-nowrap font-mono text-2xl font-black">{metrics.runningKm.formattedValue}</p>
+                <HeroMetricValue isLoading={isMetricsLoading} isEmpty={(metrics.runningKm.value ?? 0) <= 0} value={metrics.runningKm.formattedValue} />
               </div>
               <div className="rounded-md border border-[rgba(244,247,244,0.12)] bg-[rgba(244,247,244,0.035)] p-3">
                 <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">RPE</p>
-                <p className="mt-2 whitespace-nowrap font-mono text-2xl font-black">{metrics.averageRpe.formattedValue}</p>
+                <HeroMetricValue isLoading={isMetricsLoading} isEmpty={metrics.averageRpe.value === null} value={metrics.averageRpe.formattedValue} />
               </div>
             </div>
           </div>
@@ -453,10 +600,12 @@ export function HomeView({
 
         <Card>
           <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Último entrenamiento</p>
-          {latestSession ? (
+          {isMetricsLoading ? (
+            <LatestSessionSkeleton />
+          ) : latestSession ? (
             <LatestSessionCard session={latestSession} />
           ) : (
-            <p className="mt-4 text-sm leading-6 text-[var(--muted)]">Todavía no hay entrenamientos para mostrar.</p>
+            <p className="mt-4 text-sm leading-6 text-[var(--muted)]">Sin sesiones en este periodo.</p>
           )}
         </Card>
       </section>
@@ -470,27 +619,28 @@ export function HomeView({
       <div className="flex flex-col gap-6">
         <section className="order-2 grid gap-4 sm:grid-cols-2 xl:grid-cols-4 lg:order-1">
           <MetricLink href="/training/weekly">
-            <MetricCard label="Sesiones semana" value={metrics.sessions.formattedValue} detail="Estado semanal" delta={metrics.sessions.deltaLabel} deltaTone={metrics.sessions.deltaTone} tone="strong" />
+            <MetricCard label="Sesiones semana" value={metrics.sessions.formattedValue} detail="Estado semanal" delta={metrics.sessions.deltaLabel} deltaTone={metrics.sessions.deltaTone} tone="strong" state={sessionsState} />
           </MetricLink>
           <MetricLink href="/training/running">
-            <MetricCard label="Running" value={metrics.runningKm.formattedValue} detail="Running + HYROX" delta={metrics.runningKm.deltaLabel} deltaTone={metrics.runningKm.deltaTone} tone="strong" />
+            <MetricCard label="Running" value={metrics.runningKm.formattedValue} detail="Solo type running" delta={metrics.runningKm.deltaLabel} deltaTone={metrics.runningKm.deltaTone} tone="strong" state={runningState} />
           </MetricLink>
           <MetricLink href="/dashboard">
-            <MetricCard label="Duración" value={metrics.durationMinutes.formattedValue} detail="Carga de la semana" delta={metrics.durationMinutes.deltaLabel} deltaTone={metrics.durationMinutes.deltaTone} />
+            <MetricCard label="Duración" value={metrics.durationMinutes.formattedValue} detail="Carga de la semana" delta={metrics.durationMinutes.deltaLabel} deltaTone={metrics.durationMinutes.deltaTone} state={durationState} />
           </MetricLink>
           <MetricLink href="/dashboard">
-            <MetricCard label="RPE medio" value={metrics.averageRpe.formattedValue} detail="Intensidad percibida" delta={metrics.averageRpe.deltaLabel} deltaTone={metrics.averageRpe.deltaTone} />
+            <MetricCard label="RPE medio" value={metrics.averageRpe.formattedValue} detail="Intensidad percibida" delta={metrics.averageRpe.deltaLabel} deltaTone={metrics.averageRpe.deltaTone} state={rpeState} />
           </MetricLink>
         </section>
 
         <section className="order-1 grid gap-5 lg:order-2 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <WatchCard signals={watchSignals} />
-          <NextActionCard action={nextAction} />
+          <WatchCard signals={watchSignals} isLoading={isMetricsLoading} />
+          <NextActionCard action={nextAction} isLoading={isMetricsLoading} />
         </section>
 
         <section className="order-3 grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.8fr)_320px]">
-          <TrainingMixCard rows={miniMixRows} density="compact" actionHref="/dashboard" actionLabel="Ver dashboard" />
-          <MuscleSummaryCard muscles={visibleMuscles} />
+          <TrainingMixCard rows={miniMixRows} density="compact" actionHref="/dashboard" actionLabel="Ver dashboard" state={isMetricsLoading ? "loading" : miniMixRows.length > 0 ? "ready" : "empty"} />
+          <MuscleSummaryCard muscles={visibleMuscles} isLoading={isMetricsLoading} />
+          <SecondaryActivityCard summary={secondaryActivitySummary} isLoading={isMetricsLoading} />
           <QuickLinksCard />
         </section>
       </div>

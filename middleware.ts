@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { isAllowedAuthEmail } from "@/lib/auth/allow-list";
+import { isDevAuthBypassEnabled } from "@/lib/auth/dev-auth-bypass";
 
 const PUBLIC_PATHS = ["/login", "/auth/callback"];
 
@@ -11,8 +12,13 @@ function isPublicPath(pathname: string) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   let response = NextResponse.next({ request });
+  const devAuthBypassEnabled = isDevAuthBypassEnabled();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (devAuthBypassEnabled) {
+    return response;
+  }
 
   if (!supabaseUrl || !supabaseAnonKey) {
     if (isPublicPath(pathname)) {

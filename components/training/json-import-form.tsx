@@ -1,12 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { isPureRunningSession } from "@/lib/domain/training/session-kind";
 import { addShoesToHybridOSJson } from "@/lib/imports/app-input-json";
 import { getTopMuscles } from "@/lib/selectors/training";
-import { RemoteAppInputImportError, saveRemoteAppInputs, type RemoteAppInputImportErrorDetail } from "@/lib/storage/training-storage";
+import {
+  dryRunRemoteAppInputs,
+  RemoteAppInputImportError,
+  saveRemoteAppInputs,
+  type RemoteAppInputDryRunResult,
+  type RemoteAppInputImportErrorDetail,
+} from "@/lib/storage/training-storage";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
 import { repairJsonText, validateHybridOSImport, type ImportIssue } from "@/lib/validation/hybrid-os-input";
 import { formatMuscleName, formatTrainingType } from "@/lib/utils/format";
@@ -109,7 +116,13 @@ Reglas criticas:
 - Para running puro (trainingSession.type === "running"), si el usuario indica zapatillas, rellena "trainingSession.equipment.shoes".
 - Para running puro sin zapatillas indicadas, no las inventes y añade en "importNotes": "Zapatillas no indicadas; pendiente para seguimiento de volumen por modelo."
 - No añadas zapatillas a "pendingFields".
+- No exijas zapatillas salvo que trainingSession.type === "running".
 - Para HYROX, CrossFit o mixed con carrera, no exijas zapatillas salvo que el usuario las indique explícitamente.
+- Pádel, rutas, caminatas largas y senderismo son actividades secundarias: usa trainingSession.type "actividad_funcional", no "running".
+- Pádel debe llevar tags ["padel", "racket-sport", "secondary-activity"].
+- Ruta, caminata o senderismo debe llevar tags ["hiking" o "walking", "route", "secondary-activity"] según el caso.
+- No registres rutas andando, caminatas o senderismo como running aunque tengan distancia.
+- Si una actividad secundaria aporta duración, distancia o intensidad, estima sessionMetrics y sessionMuscleSummary de forma razonable y explica la estimación en importNotes.
 - "blocks" puede estar vacio solo si no hay detalle suficiente, pero si hay ejercicios debes crear bloques y ejercicios.
 - Los ids deben ser estables, en kebab-case, preferiblemente con tipo-fecha-titulo. Ejemplo: "hyrox-2026-05-26-pairs-workout".
 
@@ -251,8 +264,10 @@ type ValidationState = {
   preview?: HybridOSAppInput[];
   errors: ImportIssue[];
   warnings: ImportIssue[];
+  normalizationChanges: ImportIssue[];
   duplicates: string[];
   repairedText?: string;
+  normalizedText?: string;
   autoRepaired?: boolean;
   repairFixes?: string[];
   rawParseError?: string;
@@ -279,6 +294,32 @@ type GroupedIssue = {
 type SaveErrorState = {
   message: string;
   details: RemoteAppInputImportErrorDetail[];
+};
+
+type ImportSaveStatus = "idle" | "validating" | "ready" | "simulating" | "saving" | "saved" | "error" | "duplicate";
+
+type SaveSuccessState = {
+  message: string;
+  savedSessionIds: string[];
+  savedExercises: number;
+  savedBodyChecks: number;
+  savedNutritionChecks: number;
+};
+
+type DryRunSuccessState = {
+  message: string;
+  result: RemoteAppInputDryRunResult;
+};
+
+type MainFeedbackTone = "neutral" | "success" | "warning" | "danger";
+
+type MainFeedback = {
+  tone: MainFeedbackTone;
+  indicator: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  action: string;
 };
 
 function issueSection(path: string): IssueSection {
@@ -397,15 +438,281 @@ function issueSearchTokens(issue: ImportIssue) {
   return tokens.filter((token) => token.length > 0);
 }
 
-function IssueList({ title, issues, onIssueSelect }: { title: string; issues: ImportIssue[]; onIssueSelect: (issue: ImportIssue) => void }) {
+function LoadingSpinner() {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent align-[-2px]"
+    />
+  );
+}
+
+function feedbackToneClasses(tone: MainFeedbackTone) {
+  if (tone === "success") {
+    return {
+      container: "border-[rgba(56,217,159,0.38)] bg-[rgba(56,217,159,0.09)]",
+      indicator: "border-[rgba(56,217,159,0.42)] bg-[rgba(56,217,159,0.14)] text-[var(--accent)]",
+      text: "text-[var(--accent)]",
+    };
+  }
+
+  if (tone === "danger") {
+    return {
+      container: "border-[rgba(255,99,99,0.34)] bg-[rgba(255,99,99,0.08)]",
+      indicator: "border-[rgba(255,99,99,0.38)] bg-[rgba(255,99,99,0.12)] text-[#ff9f9f]",
+      text: "text-[#ffb4b4]",
+    };
+  }
+
+  if (tone === "warning") {
+    return {
+      container: "border-[rgba(240,196,107,0.32)] bg-[var(--warning-soft)]",
+      indicator: "border-[rgba(240,196,107,0.38)] bg-[rgba(240,196,107,0.12)] text-[var(--warning)]",
+      text: "text-[var(--warning)]",
+    };
+  }
+
+  return {
+    container: "border-[var(--line)] bg-[rgba(244,247,244,0.025)]",
+    indicator: "border-[var(--line)] bg-[var(--panel-soft)] text-[var(--muted-strong)]",
+    text: "text-[var(--muted-strong)]",
+  };
+}
+
+function buildMainFeedback(
+  validation: ValidationState,
+  saveStatus: ImportSaveStatus,
+  dryRunSuccess: DryRunSuccessState | null,
+  saveSuccess: SaveSuccessState | null,
+  saveError: SaveErrorState | null,
+): MainFeedback {
+  if (saveSuccess) {
+    return {
+      tone: "success",
+      indicator: "OK",
+      eyebrow: "Guardado",
+      title: "Guardado correctamente en Supabase",
+      description: saveSuccess.message,
+      action: "Siguiente: revisa el Training Log o importa otra sesión.",
+    };
+  }
+
+  if (dryRunSuccess && dryRunSuccess.result.duplicates.length > 0) {
+    return {
+      tone: "warning",
+      indicator: "=",
+      eyebrow: "Simulación",
+      title: "Duplicado detectado",
+      description: "La simulación encontró una sesión existente con el mismo id. No se han escrito datos.",
+      action: "Siguiente: abre la sesión existente o cambia el id solo si realmente es una sesión distinta.",
+    };
+  }
+
+  if (dryRunSuccess) {
+    return {
+      tone: "success",
+      indicator: "OK",
+      eyebrow: "Simulación",
+      title: "Simulación correcta",
+      description: dryRunSuccess.message,
+      action: "Siguiente: puedes guardar en Supabase cuando quieras hacer la importación real.",
+    };
+  }
+
+  if (saveStatus === "saving") {
+    return {
+      tone: "success",
+      indicator: "...",
+      eyebrow: "Guardando",
+      title: "Guardando en Supabase...",
+      description: "Estamos guardando la sesión y sus datos asociados. No cierres esta vista todavía.",
+      action: "Siguiente: espera a que termine el guardado.",
+    };
+  }
+
+  if (saveStatus === "simulating") {
+    return {
+      tone: "neutral",
+      indicator: "...",
+      eyebrow: "Simulación",
+      title: "Simulando guardado",
+      description: "Validando en servidor y comprobando duplicados sin escribir datos en Supabase.",
+      action: "Siguiente: espera a que termine la simulación.",
+    };
+  }
+
+  if (saveStatus === "duplicate" || validation.duplicates.length > 0) {
+    return {
+      tone: "warning",
+      indicator: "=",
+      eyebrow: "Duplicado detectado",
+      title: "Sesión duplicada",
+      description: "El JSON es válido, pero una sesión con el mismo id ya existe. No se guardará otro duplicado desde este importador.",
+      action: "Siguiente: abre la sesión existente o cambia el id solo si realmente es una sesión distinta.",
+    };
+  }
+
+  if (saveError) {
+    return {
+      tone: "danger",
+      indicator: "!",
+      eyebrow: "Guardado bloqueado",
+      title: "Error al guardar",
+      description: saveError.message,
+      action: "Siguiente: revisa el detalle técnico y vuelve a intentar cuando esté corregido.",
+    };
+  }
+
+  if (validation.status === "error") {
+    return {
+      tone: "danger",
+      indicator: "!",
+      eyebrow: "JSON inválido",
+      title: "JSON inválido",
+      description: "Hay errores críticos en el contrato. El guardado queda bloqueado hasta corregirlos.",
+      action: "Siguiente: corrige los errores críticos y vuelve a validar el JSON.",
+    };
+  }
+
+  if (validation.status === "valid" && validation.warnings.length > 0) {
+    return {
+      tone: "warning",
+      indicator: "!",
+      eyebrow: "JSON válido",
+      title: "JSON válido con warnings",
+      description: "Los avisos no bloquean el guardado.",
+      action: "Siguiente: revisa los warnings si quieres mejorar la calidad de datos, o guarda en Supabase.",
+    };
+  }
+
+  if (validation.status === "valid") {
+    return {
+      tone: "success",
+      indicator: "OK",
+      eyebrow: "JSON válido",
+      title: "JSON válido",
+      description: "El contrato es válido y no hay warnings.",
+      action: "Siguiente: guarda la sesión en Supabase.",
+    };
+  }
+
+  return {
+    tone: "neutral",
+    indicator: "?",
+    eyebrow: "Sin validar",
+    title: "Valida el JSON",
+    description: "Pega o edita un HybridOSAppInput y valida el contrato antes de guardar.",
+    action: "Siguiente: pulsa Validar JSON.",
+  };
+}
+
+function MainFeedbackPanel({
+  feedback,
+  dryRunSuccess,
+  saveSuccess,
+  duplicateIds,
+  duplicateSessions,
+  onImportAnother,
+  onClear,
+}: {
+  feedback: MainFeedback;
+  dryRunSuccess: DryRunSuccessState | null;
+  saveSuccess: SaveSuccessState | null;
+  duplicateIds: string[];
+  duplicateSessions: TrainingSession[];
+  onImportAnother: () => void;
+  onClear: () => void;
+}) {
+  const classes = feedbackToneClasses(feedback.tone);
+  const firstDuplicate = duplicateSessions[0];
+  const firstDuplicateId = firstDuplicate?.id ?? duplicateIds[0];
+  const isLoadingFeedback = feedback.title === "Guardando en Supabase..." || feedback.title === "Simulando guardado";
+
+  return (
+    <section className={`mt-4 rounded-md border p-4 ${classes.container}`}>
+      <div className="flex gap-3">
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md border text-xs font-black ${classes.indicator}`}>
+          {isLoadingFeedback ? <LoadingSpinner /> : feedback.indicator}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className={`text-xs font-black uppercase tracking-[0.14em] ${classes.text}`}>{feedback.eyebrow}</p>
+          <h4 className="mt-1 text-xl font-black tracking-tight text-[var(--foreground)]">{feedback.title}</h4>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{feedback.description}</p>
+          <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{feedback.action}</p>
+        </div>
+      </div>
+
+      {saveSuccess ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            href="/training"
+            className="rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent)] px-3 py-2 text-sm font-black text-[#06100c] transition hover:bg-[var(--accent-strong)] focus-visible:bg-[var(--accent-strong)]"
+          >
+            Ver en Training Log
+          </Link>
+          <button
+            type="button"
+            onClick={onImportAnother}
+            className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
+          >
+            Importar otra sesión
+          </button>
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-3 py-2 text-sm font-bold text-[var(--muted-strong)] transition hover:border-[rgba(56,217,159,0.34)]"
+          >
+            Limpiar
+          </button>
+        </div>
+      ) : null}
+
+      {dryRunSuccess ? (
+        <div className="mt-4 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 text-sm text-[var(--muted-strong)]">
+          <p className="font-semibold text-[var(--foreground)]">
+            {dryRunSuccess.result.wouldImport} {dryRunSuccess.result.wouldImport === 1 ? "sesión se podría guardar" : "sesiones se podrían guardar"}.
+          </p>
+          <p className="mt-1">Fases simuladas: {dryRunSuccess.result.phases.length > 0 ? dryRunSuccess.result.phases.join(", ") : "ninguna"}.</p>
+        </div>
+      ) : null}
+
+      {!saveSuccess && firstDuplicateId ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            href={`/training/${firstDuplicateId}`}
+            className="rounded-md border border-[rgba(240,196,107,0.34)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--warning)] focus-visible:border-[var(--warning)]"
+          >
+            Ver sesión existente
+          </Link>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function IssueList({
+  title,
+  description,
+  issues,
+  tone = "neutral",
+  onIssueSelect,
+}: {
+  title: string;
+  description: string;
+  issues: ImportIssue[];
+  tone?: MainFeedbackTone;
+  onIssueSelect: (issue: ImportIssue) => void;
+}) {
   if (issues.length === 0) return null;
 
   const groupedIssues = groupIssues(issues);
   const sections: IssueSection[] = ["JSON raíz", "Training Session", "Blocks", "Exercises", "Muscle Load", "Body Check", "Nutrition Check"];
+  const classes = feedbackToneClasses(tone);
 
   return (
-    <div className="mt-4 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-4">
-      <p className="text-sm font-semibold">{title}</p>
+    <div className={`mt-4 rounded-md border p-4 ${classes.container}`}>
+      <p className={`text-sm font-black ${classes.text}`}>{title}</p>
+      <p className="mt-1 text-sm text-[var(--muted-strong)]">{description}</p>
       <div className="mt-3 space-y-4">
         {sections.map((section) => {
           const sectionIssues = groupedIssues.filter((issue) => issue.section === section);
@@ -421,13 +728,17 @@ function IssueList({ title, issues, onIssueSelect }: { title: string; issues: Im
                   return (
                     <li key={group.key} className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
                       <p className="font-semibold text-[var(--foreground)]">
-                        <span className="mr-2 font-mono text-[0.7rem] uppercase text-[var(--accent)]">{firstIssue.severity}</span>
-                        {group.count > 1 ? `${group.count} errores: ` : null}
+                        <span className={`mr-2 font-mono text-[0.7rem] uppercase ${classes.text}`}>{firstIssue.severity}</span>
+                        {group.count > 1 ? `${group.count} ${firstIssue.severity === "warning" ? "avisos" : "errores"}: ` : null}
                         {group.title}
                       </p>
-                      <p className="mt-1 font-mono text-xs text-[var(--accent)]">{firstIssue.path}</p>
                       {firstIssue.receivedValue !== undefined ? (
                         <p className="mt-1">Valor recibido: <span className="font-mono text-[var(--warning)]">{formatValue(firstIssue.receivedValue)}</span></p>
+                      ) : null}
+                      {firstIssue.normalizedValue !== undefined ? (
+                        <p className="mt-1">
+                          Normalizado a: <span className="font-mono text-[var(--accent)]">{formatValue(firstIssue.normalizedValue)}</span>
+                        </p>
                       ) : null}
                       {firstIssue.allowedValues ? (
                         <p className="mt-1">Valores permitidos: <span className="font-mono">{firstIssue.allowedValues.map((value) => `"${value}"`).join(", ")}</span></p>
@@ -445,7 +756,11 @@ function IssueList({ title, issues, onIssueSelect }: { title: string; issues: Im
                           <summary className="cursor-pointer text-xs font-bold text-[var(--accent)]">Ver detalle técnico</summary>
                           <ul className="mt-2 space-y-1 font-mono text-xs leading-5 text-[#d9f2e9]">
                             {group.issues.map((issue, index) => (
-                              <li key={`${issue.path}-${issue.message}-${index}`}>{issue.path}: {issue.message}</li>
+                              <li key={`${issue.path}-${issue.message}-${index}`}>
+                                {issue.path}: {issue.message}
+                                {issue.receivedValue !== undefined ? ` · recibido ${formatValue(issue.receivedValue)}` : ""}
+                                {issue.normalizedValue !== undefined ? ` · normalizado ${formatValue(issue.normalizedValue)}` : ""}
+                              </li>
                             ))}
                           </ul>
                         </details>
@@ -462,49 +777,13 @@ function IssueList({ title, issues, onIssueSelect }: { title: string; issues: Im
   );
 }
 
-function ValidationStatusPanel({ validation }: { validation: ValidationState }) {
-  if (validation.status === "idle") {
-    return (
-      <div className="mt-4 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-4">
-        <Badge>Sin validar</Badge>
-        <p className="mt-2 text-sm text-[var(--muted)]">Pega o edita el JSON y pulsa Validar JSON.</p>
-      </div>
-    );
-  }
-
-  if (validation.errors.length > 0) {
-    return (
-      <div className="mt-4 rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-4">
-        <Badge tone="warning">Errores críticos</Badge>
-        <p className="mt-2 text-sm font-semibold text-[var(--warning)]">Hay errores críticos. La importación está bloqueada.</p>
-      </div>
-    );
-  }
-
-  if (validation.warnings.length > 0) {
-    return (
-      <div className="mt-4 rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-4">
-        <Badge tone="warning">JSON válido con warnings</Badge>
-        <p className="mt-2 text-sm text-[var(--muted-strong)]">Puedes importar, pero conviene revisar los avisos de calidad.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-4 rounded-md border border-[rgba(56,217,159,0.34)] bg-[rgba(56,217,159,0.08)] p-4">
-      <Badge tone="accent">JSON válido</Badge>
-      <p className="mt-2 text-sm text-[var(--accent)]">El contrato es válido y no hay warnings.</p>
-    </div>
-  );
-}
-
 function SaveErrorDetails({ error }: { error: SaveErrorState | null }) {
   if (!error) return null;
 
   return (
-    <div className="mt-3 rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-4">
-      <p className="text-sm font-semibold text-[var(--warning)]">Supabase / guardado</p>
-      <p className="mt-2 text-sm text-[var(--muted-strong)]">{error.message}</p>
+    <div className="mt-4 rounded-md border border-[rgba(255,99,99,0.34)] bg-[rgba(255,99,99,0.08)] p-4">
+      <p className="text-sm font-black text-[#ffb4b4]">Errores críticos</p>
+      <p className="mt-1 text-sm text-[var(--muted-strong)]">El guardado en Supabase no se completó.</p>
       {error.details.length > 0 ? (
         <ul className="mt-3 space-y-2 text-sm text-[var(--muted)]">
           {error.details.map((detail, index) => (
@@ -522,6 +801,61 @@ function SaveErrorDetails({ error }: { error: SaveErrorState | null }) {
         </ul>
       ) : null}
     </div>
+  );
+}
+
+function TechnicalDetails({ validation, saveError }: { validation: ValidationState; saveError: SaveErrorState | null }) {
+  const hasValidationDetail = Boolean(
+    validation.rawParseError ||
+    validation.repairFixes?.length ||
+    validation.normalizationChanges.length ||
+    validation.errors.length ||
+    validation.warnings.length,
+  );
+  const hasSaveDetail = Boolean(saveError);
+
+  if (!hasValidationDetail && !hasSaveDetail) return null;
+
+  return (
+    <details className="mt-4 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-4">
+      <summary className="cursor-pointer text-sm font-black text-[var(--accent)]">Detalle técnico</summary>
+      <div className="mt-3 space-y-3 text-sm text-[var(--muted)]">
+        {validation.rawParseError ? (
+          <div>
+            <p className="font-semibold text-[var(--foreground)]">Error original</p>
+            <pre className="mt-2 overflow-auto rounded-md bg-[var(--panel-soft)] p-3 text-xs leading-5 text-[#d9f2e9]">{validation.rawParseError}</pre>
+          </div>
+        ) : null}
+        {validation.repairFixes && validation.repairFixes.length > 0 ? (
+          <div>
+            <p className="font-semibold text-[var(--foreground)]">Reparaciones automáticas</p>
+            <ul className="mt-2 space-y-1 font-mono text-xs leading-5 text-[#d9f2e9]">
+              {validation.repairFixes.map((fix) => (
+                <li key={fix}>{fix}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {validation.errors.length > 0 || validation.normalizationChanges.length > 0 || validation.warnings.length > 0 ? (
+          <div>
+            <p className="font-semibold text-[var(--foreground)]">Paths internos</p>
+            <ul className="mt-2 space-y-1 font-mono text-xs leading-5 text-[#d9f2e9]">
+              {[...validation.errors, ...validation.normalizationChanges, ...validation.warnings].map((issue, index) => (
+                <li key={`${issue.path}-${index}`}>{issue.path}: {issue.message}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {saveError ? (
+          <div>
+            <p className="font-semibold text-[var(--foreground)]">Supabase / guardado</p>
+            <pre className="mt-2 overflow-auto rounded-md bg-[var(--panel-soft)] p-3 text-xs leading-5 text-[#d9f2e9]">
+              {JSON.stringify(saveError.details.length > 0 ? saveError.details : { message: saveError.message }, null, 2)}
+            </pre>
+          </div>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
@@ -675,31 +1009,42 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const [rawJson, setRawJson] = useState(sampleInput);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDryRunning, setIsDryRunning] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<ImportSaveStatus>("idle");
   const [copyPromptMessage, setCopyPromptMessage] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [dryRunSuccess, setDryRunSuccess] = useState<DryRunSuccessState | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<SaveSuccessState | null>(null);
   const [saveError, setSaveError] = useState<SaveErrorState | null>(null);
   const [validation, setValidation] = useState<ValidationState>({
     status: "idle",
     message: "Pega un HybridOSAppInput v1.0/v1.1 o un array de inputs y valida el JSON.",
     errors: [],
     warnings: [],
+    normalizationChanges: [],
     duplicates: [],
   });
 
   function validateJson(inputOverride?: string) {
+    setSaveStatus("validating");
     setSaveMessage(null);
+    setDryRunSuccess(null);
+    setSaveSuccess(null);
     setSaveError(null);
     const textToValidate = inputOverride ?? rawJson;
     const result = validateHybridOSImport(textToValidate);
 
     if (!result.valid) {
+      setSaveStatus("error");
       setValidation({
         status: "error",
         message: "Hay errores críticos. La importación queda bloqueada hasta corregirlos.",
         errors: result.errors,
         warnings: result.warnings,
+        normalizationChanges: result.normalizationChanges,
         duplicates: [],
         repairedText: result.repairedText,
+        normalizedText: result.normalizedText,
         autoRepaired: result.autoRepaired,
         repairFixes: result.repairFixes,
         rawParseError: result.rawParseError,
@@ -707,23 +1052,30 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
       return;
     }
 
-    const existingIds = new Set(existingSessions.map((session) => session.id));
+    const existingIds = new Set(
+      existingSessions
+        .filter((session) => (session as { dataSource?: string }).dataSource !== "seed")
+        .map((session) => session.id),
+    );
     const duplicates = (result.parsed ?? [])
       .map((input) => input.trainingSession.id)
       .filter((id) => existingIds.has(id));
 
+    setSaveStatus(duplicates.length > 0 ? "duplicate" : "ready");
     setValidation({
       status: "valid",
       message: duplicates.length > 0
-        ? "Contrato válido. Una o más sesiones ya existen y se actualizarán al importar."
+        ? "Contrato válido. Una o más sesiones ya existen; no se guardará un duplicado desde este flujo."
         : result.warnings.length > 0
           ? "Contrato válido con warnings no bloqueantes. Puedes guardar, pero conviene revisar la calidad de datos."
           : "Contrato válido. Ya puedes guardar la sesión en la base de datos.",
       preview: result.parsed,
       errors: [],
       warnings: result.warnings,
+      normalizationChanges: result.normalizationChanges,
       duplicates,
       repairedText: result.repairedText,
+      normalizedText: result.normalizedText,
       autoRepaired: result.autoRepaired,
       repairFixes: result.repairFixes,
       rawParseError: result.rawParseError,
@@ -732,61 +1084,80 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
 
   function resetValidationAfterEdit(nextRawJson: string) {
     setRawJson(nextRawJson);
+    setSaveStatus("idle");
     setSaveMessage(null);
+    setDryRunSuccess(null);
+    setSaveSuccess(null);
     setSaveError(null);
     setValidation({
       status: "idle",
       message: "El input cambió. Valida de nuevo antes de guardar.",
       errors: [],
       warnings: [],
+      normalizationChanges: [],
       duplicates: [],
     });
   }
 
   function applyRepairedJson() {
-    if (!validation.repairedText) {
+    const cleanJson = validation.normalizedText ?? validation.repairedText;
+
+    if (!cleanJson) {
       return;
     }
 
-    setRawJson(validation.repairedText);
-    setSaveMessage("JSON reparado aplicado al input.");
+    setRawJson(cleanJson);
+    setSaveMessage(validation.normalizedText ? "JSON normalizado aplicado al input." : "JSON reparado aplicado al input.");
     editorRef.current?.focus();
-    validateJson(validation.repairedText);
+    validateJson(cleanJson);
   }
 
   function formatJsonInput() {
+    setSaveStatus("idle");
+    setDryRunSuccess(null);
+    setSaveSuccess(null);
     setSaveError(null);
-    let parsed: unknown;
-    let textToFormat = rawJson;
+    const result = validateHybridOSImport(rawJson);
+    const cleanJson = result.normalizedText ?? result.repairedText;
+    let textToFormat = cleanJson ?? rawJson;
 
-    try {
-      parsed = JSON.parse(rawJson) as unknown;
-    } catch {
-      const repairResult = repairJsonText(rawJson);
-
+    if (!cleanJson) {
       try {
-        parsed = JSON.parse(repairResult.repairedText) as unknown;
-        textToFormat = repairResult.repairedText;
+        JSON.parse(rawJson) as unknown;
       } catch {
-        setSaveMessage("No se pudo formatear: el JSON no parsea ni se puede reparar automáticamente.");
-        return;
+        const repairResult = repairJsonText(rawJson);
+
+        try {
+          JSON.parse(repairResult.repairedText) as unknown;
+          textToFormat = repairResult.repairedText;
+        } catch {
+          setSaveMessage("No se pudo formatear: el JSON no se puede interpretar. Revisa comillas, llaves y comas.");
+          return;
+        }
       }
     }
 
-    setRawJson(JSON.stringify(parsed, null, 2));
-    setSaveMessage(textToFormat === rawJson ? "JSON formateado." : "JSON reparado y formateado. Valida antes de guardar.");
+    try {
+      setRawJson(JSON.stringify(JSON.parse(textToFormat) as unknown, null, 2));
+    } catch {
+      setSaveMessage("No se pudo formatear: el JSON no se puede interpretar. Revisa comillas, llaves y comas.");
+      return;
+    }
+
+    setSaveMessage(cleanJson ? "JSON reparado/normalizado y formateado. Valida antes de guardar." : "JSON formateado.");
     setValidation({
       status: "idle",
       message: "JSON formateado. Valida de nuevo antes de guardar.",
       errors: [],
       warnings: [],
+      normalizationChanges: [],
       duplicates: [],
     });
   }
 
   function addShoesToInput(inputIndex: number, sessionId: string, shoes: string) {
     try {
-      const nextRawJson = addShoesToHybridOSJson(rawJson, inputIndex, sessionId, shoes, validation.repairedText);
+      const nextRawJson = addShoesToHybridOSJson(rawJson, inputIndex, sessionId, shoes, validation.normalizedText ?? validation.repairedText);
       setRawJson(nextRawJson);
       validateJson(nextRawJson);
       setSaveMessage(`Zapatillas añadidas: ${shoes}.`);
@@ -796,13 +1167,15 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
   }
 
   async function copyRepairedJson() {
-    if (!validation.repairedText) {
+    const cleanJson = validation.normalizedText ?? validation.repairedText;
+
+    if (!cleanJson) {
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(validation.repairedText);
-      setCopyPromptMessage("JSON reparado copiado.");
+      await navigator.clipboard.writeText(cleanJson);
+      setCopyPromptMessage(validation.normalizedText ? "JSON normalizado copiado." : "JSON reparado copiado.");
     } catch {
       setCopyPromptMessage("No se pudo copiar el JSON reparado.");
     }
@@ -854,11 +1227,17 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
             }))
           : parsed;
       setRawJson(JSON.stringify(input, null, 2));
+      setSaveStatus("idle");
       setSaveMessage("Backup cargado en el formulario. Valida antes de guardar.");
+      setDryRunSuccess(null);
+      setSaveSuccess(null);
       setSaveError(null);
-      setValidation({ status: "idle", message: "Backup cargado. Valida el JSON antes de guardar.", errors: [], warnings: [], duplicates: [] });
+      setValidation({ status: "idle", message: "Backup cargado. Valida el JSON antes de guardar.", errors: [], warnings: [], normalizationChanges: [], duplicates: [] });
     } catch {
       setSaveMessage("No se pudo leer el backup como JSON válido.");
+      setSaveStatus("error");
+      setDryRunSuccess(null);
+      setSaveSuccess(null);
       setSaveError(null);
     }
   }
@@ -873,22 +1252,99 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
   }
 
   async function saveValidSessions() {
-    if (!validation.preview) {
+    if (!validation.preview || isSaving || isDryRunning || saveStatus === "saved") {
       return;
     }
 
+    setSaveStatus("saving");
     setIsSaving(true);
+    setDryRunSuccess(null);
+    setSaveSuccess(null);
     setSaveError(null);
 
     try {
       const result = await saveRemoteAppInputs(validation.preview);
       const sessionCount = result.savedSessionIds.length;
-      setSaveMessage(
-        `${sessionCount} ${sessionCount === 1 ? "sesión guardada" : "sesiones guardadas"} en Supabase. ${result.savedExercises} ejercicios, ${result.savedBodyCheckIds.length} body checks y ${result.savedNutritionCheckIds.length} nutrition checks guardados.`,
-      );
+      setSaveMessage(null);
+      setSaveStatus("saved");
+      setSaveSuccess({
+        message: `${sessionCount} ${sessionCount === 1 ? "sesión guardada" : "sesiones guardadas"} en Supabase. ${result.savedExercises} ejercicios, ${result.savedBodyCheckIds.length} body checks y ${result.savedNutritionCheckIds.length} nutrition checks guardados.`,
+        savedSessionIds: result.savedSessionIds,
+        savedExercises: result.savedExercises,
+        savedBodyChecks: result.savedBodyCheckIds.length,
+        savedNutritionChecks: result.savedNutritionCheckIds.length,
+      });
     } catch (error) {
       if (error instanceof RemoteAppInputImportError) {
         setSaveMessage(null);
+        setSaveStatus(error.duplicateIds.length > 0 ? "duplicate" : "error");
+        if (error.duplicateIds.length > 0) {
+          setValidation((current) => ({
+            ...current,
+            duplicates: Array.from(new Set([...current.duplicates, ...error.duplicateIds])),
+          }));
+        }
+        setSaveSuccess(null);
+        setSaveError(error.duplicateIds.length > 0
+          ? null
+          : {
+              message: error.message,
+              details: error.details,
+            });
+        return;
+      }
+
+      setSaveMessage(null);
+      setSaveStatus("error");
+      setSaveSuccess(null);
+      setSaveError({
+        message: error instanceof Error ? error.message : "No se pudo guardar en Supabase.",
+        details: [],
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function dryRunValidSessions() {
+    if (!validation.preview || isSaving || isDryRunning) {
+      return;
+    }
+
+    setSaveStatus("simulating");
+    setIsDryRunning(true);
+    setSaveMessage(null);
+    setDryRunSuccess(null);
+    setSaveSuccess(null);
+    setSaveError(null);
+
+    try {
+      const result = await dryRunRemoteAppInputs(validation.preview);
+      const duplicates = result.duplicates ?? [];
+
+      if (duplicates.length > 0) {
+        setSaveStatus("duplicate");
+      } else {
+        setSaveStatus("ready");
+      }
+      setValidation((current) => ({
+        ...current,
+        duplicates,
+      }));
+
+      setDryRunSuccess({
+        message: "Esta sesión se podría guardar. No se han escrito datos.",
+        result,
+      });
+    } catch (error) {
+      if (error instanceof RemoteAppInputImportError) {
+        setSaveStatus(error.duplicateIds.length > 0 ? "duplicate" : "error");
+        if (error.duplicateIds.length > 0) {
+          setValidation((current) => ({
+            ...current,
+            duplicates: Array.from(new Set([...current.duplicates, ...error.duplicateIds])),
+          }));
+        }
         setSaveError({
           message: error.message,
           details: error.details.length > 0
@@ -898,17 +1354,45 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
         return;
       }
 
-      setSaveMessage(error instanceof Error ? error.message : "No se pudo guardar en Supabase.");
+      setSaveStatus("error");
+      setSaveError({
+        message: error instanceof Error ? error.message : "No se pudo simular el guardado.",
+        details: [],
+      });
     } finally {
-      setIsSaving(false);
+      setIsDryRunning(false);
     }
+  }
+
+  function clearImportForm(message = "Pega un HybridOSAppInput v1.0/v1.1 o un array de inputs y valida el JSON.") {
+    setRawJson("");
+    setSaveStatus("idle");
+    setSaveMessage(null);
+    setDryRunSuccess(null);
+    setSaveSuccess(null);
+    setSaveError(null);
+    setValidation({ status: "idle", message, errors: [], warnings: [], normalizationChanges: [], duplicates: [] });
+  }
+
+  function importAnotherSession() {
+    clearImportForm("Listo para importar otra sesión. Pega el JSON y valida antes de guardar.");
+    requestAnimationFrame(() => editorRef.current?.focus());
   }
 
   const duplicateSessions = validation.duplicates
     .map((id) => existingSessions.find((session) => session.id === id))
     .filter((session): session is TrainingSession => Boolean(session));
-  const canSave = validation.status === "valid" && !isSaving;
-
+  const canDryRun = validation.status === "valid" && !isSaving && !isDryRunning;
+  const canSave = validation.status === "valid" && validation.duplicates.length === 0 && !isSaving && !isDryRunning && saveStatus !== "saved";
+  const mainFeedback = buildMainFeedback(validation, saveStatus, dryRunSuccess, saveSuccess, saveError);
+  const saveButtonCopy = validation.duplicates.length > 0
+    ? "Duplicado detectado"
+    : isSaving
+      ? "Guardando..."
+      : validation.autoRepaired
+        ? "Importar JSON reparado"
+        : "Guardar en Supabase";
+  const dryRunButtonCopy = isDryRunning ? "Simulando..." : "Simular guardado";
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
       <Card>
@@ -970,25 +1454,30 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
             <button
               type="button"
               onClick={() => {
-                setRawJson("");
-                setSaveMessage(null);
-                setSaveError(null);
-                setValidation({ status: "idle", message: "Pega un HybridOSAppInput v1.0/v1.1 o un array de inputs y valida el JSON.", errors: [], warnings: [], duplicates: [] });
+                clearImportForm();
               }}
               className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
             >
               Limpiar
             </button>
-            {validation.status === "valid" ? (
-              <button
-                type="button"
-                onClick={saveValidSessions}
-                disabled={!canSave}
-                className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] focus-visible:border-[rgba(56,217,159,0.34)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSaving ? "Guardando..." : validation.autoRepaired ? "Importar JSON reparado" : "Guardar en Supabase"}
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={dryRunValidSessions}
+              disabled={!canDryRun}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] focus-visible:border-[rgba(56,217,159,0.34)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isDryRunning ? <LoadingSpinner /> : null}
+              {dryRunButtonCopy}
+            </button>
+            <button
+              type="button"
+              onClick={saveValidSessions}
+              disabled={!canSave}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] focus-visible:border-[rgba(56,217,159,0.34)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSaving ? <LoadingSpinner /> : null}
+              {saveButtonCopy}
+            </button>
           </div>
         </div>
       </Card>
@@ -1004,21 +1493,35 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
             <Badge tone={validation.status === "valid" ? "accent" : validation.status === "error" ? "warning" : "neutral"}>
               {validation.status}
             </Badge>
+            <Badge tone={saveStatus === "ready" || saveStatus === "saved" ? "accent" : saveStatus === "error" || saveStatus === "duplicate" ? "warning" : "neutral"}>
+              {saveStatus}
+            </Badge>
           </div>
         </div>
-        <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{validation.message}</p>
-        <ValidationStatusPanel validation={validation} />
+        <MainFeedbackPanel
+          feedback={mainFeedback}
+          dryRunSuccess={dryRunSuccess}
+          saveSuccess={saveSuccess}
+          duplicateIds={validation.duplicates}
+          duplicateSessions={duplicateSessions}
+          onImportAnother={importAnotherSession}
+          onClear={() => clearImportForm()}
+        />
         {saveMessage ? (
-          <p className="mt-3 rounded-md border border-[rgba(56,217,159,0.34)] bg-[rgba(56,217,159,0.08)] p-3 text-sm font-semibold text-[var(--accent)]">
+          <p className="mt-3 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 text-sm font-semibold text-[var(--muted-strong)]">
             {saveMessage}
           </p>
         ) : null}
         <SaveErrorDetails error={saveError} />
-        {validation.autoRepaired && validation.repairedText ? (
+        {(validation.autoRepaired && validation.repairedText) || validation.normalizedText ? (
           <div className="mt-4 rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-4">
-            <p className="text-sm font-semibold text-[var(--warning)]">JSON reparado automáticamente</p>
+            <p className="text-sm font-semibold text-[var(--warning)]">
+              {validation.normalizedText ? "JSON normalizado automáticamente" : "JSON reparado automáticamente"}
+            </p>
             <p className="mt-2 text-sm text-[var(--muted-strong)]">
-              Se pudo parsear una versión reparada. Revisa los cambios antes de dejarla como input definitivo.
+              {validation.normalizedText
+                ? "Se aplicaron normalizaciones seguras. Revisa los cambios antes de dejar esta versión como input definitivo."
+                : "Se pudo parsear una versión reparada. Revisa los cambios antes de dejarla como input definitivo."}
             </p>
             {validation.repairFixes && validation.repairFixes.length > 0 ? (
               <ul className="mt-3 space-y-1 text-sm text-[var(--muted)]">
@@ -1032,28 +1535,54 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
               onClick={applyRepairedJson}
               className="mt-3 rounded-md border border-[rgba(240,196,107,0.34)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--warning)] focus-visible:border-[var(--warning)]"
             >
-              Aplicar JSON reparado al input
+              {validation.normalizedText ? "Aplicar JSON normalizado al input" : "Aplicar JSON reparado al input"}
             </button>
             <button
               type="button"
               onClick={copyRepairedJson}
               className="ml-2 mt-3 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] focus-visible:border-[rgba(56,217,159,0.34)]"
             >
-              Copiar JSON reparado
+              {validation.normalizedText ? "Copiar JSON normalizado" : "Copiar JSON reparado"}
             </button>
           </div>
         ) : null}
-        <IssueList title="Errores críticos" issues={validation.errors} onIssueSelect={focusIssueInEditor} />
-        <IssueList title="Warnings" issues={validation.warnings} onIssueSelect={focusIssueInEditor} />
+        <IssueList
+          title="Errores críticos"
+          description="Bloquean la importación. Corrígelos y valida de nuevo antes de guardar."
+          issues={validation.errors}
+          tone="danger"
+          onIssueSelect={focusIssueInEditor}
+        />
+        <IssueList
+          title="Normalizaciones aplicadas"
+          description="Cambios seguros aplicados antes de la validación y el guardado. No bloquean, pero conviene revisarlos."
+          issues={validation.normalizationChanges}
+          tone="warning"
+          onIssueSelect={focusIssueInEditor}
+        />
+        <IssueList
+          title="Warnings no bloqueantes"
+          description="DataQuality parcial, importNotes, zapatillas no indicadas y campos opcionales faltantes. Puedes guardar aunque haya avisos."
+          issues={validation.warnings}
+          tone="warning"
+          onIssueSelect={focusIssueInEditor}
+        />
         {validation.duplicates.length > 0 ? (
           <div className="mt-4 rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-4">
-            <p className="text-sm font-semibold text-[var(--warning)]">Esta sesión ya existe.</p>
-            <p className="mt-2 text-sm text-[var(--muted-strong)]">Al importar se actualizará la sesión principal con el mismo id y se registrará un nuevo raw import histórico.</p>
+            <p className="text-sm font-black text-[var(--warning)]">Duplicados</p>
+            <p className="mt-2 text-sm text-[var(--muted-strong)]">La sesión ya existe. El botón Guardar en Supabase queda deshabilitado para no crear ni reemplazar duplicados desde este flujo.</p>
             <ul className="mt-3 space-y-2 text-sm text-[var(--muted-strong)]">
               {duplicateSessions.map((session) => (
                 <li key={session.id} className="rounded-md border border-[var(--line)] p-3">
-                  <p className="font-semibold text-[var(--foreground)]">{session.title}</p>
-                  <p className="mt-1">{session.date} · {formatTrainingType(session.type)} · <span className="font-mono">{session.id}</span></p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-semibold text-[var(--foreground)]">{session.title}</p>
+                      <p className="mt-1">{session.date} · {formatTrainingType(session.type)} · <span className="font-mono">{session.id}</span></p>
+                    </div>
+                    <Link href={`/training/${session.id}`} className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+                      Ver sesión existente
+                    </Link>
+                  </div>
                 </li>
               ))}
               {validation.duplicates.filter((id) => !duplicateSessions.some((session) => session.id === id)).map((id) => (
@@ -1065,6 +1594,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
             </ul>
           </div>
         ) : null}
+        <TechnicalDetails validation={validation} saveError={saveError} />
         {validation.preview ? (
           <div className="mt-4 space-y-3">
             {validation.preview.map((input, inputIndex) => (

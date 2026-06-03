@@ -47,15 +47,15 @@ export function TrainingSessionCard({
       <div className="mt-5 grid grid-cols-3 gap-2 text-sm">
         <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
           <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Duración</p>
-          <p className="mt-1 font-mono text-lg font-black text-[var(--foreground)]">{session.durationMinutes ?? "-"}m</p>
+          <p className="mt-1 font-mono text-lg font-black text-[var(--foreground)]">{session.durationMinutes ? `${session.durationMinutes}m` : "Sin dato"}</p>
         </div>
         <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
           <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">RPE</p>
-          <p className="mt-1 font-mono text-lg font-black text-[var(--foreground)]">{session.rpe ?? "-"}/10</p>
+          <p className="mt-1 font-mono text-lg font-black text-[var(--foreground)]">{session.rpe ? `${session.rpe}/10` : "Sin dato"}</p>
         </div>
         <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
           <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Feeling</p>
-          <p className="mt-1 font-mono text-lg font-black text-[var(--foreground)]">{session.feeling ?? "-"}</p>
+          <p className="mt-1 font-mono text-lg font-black text-[var(--foreground)]">{session.feeling ?? "Sin dato"}</p>
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--line)] pt-4">

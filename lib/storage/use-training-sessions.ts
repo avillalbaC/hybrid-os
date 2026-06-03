@@ -48,6 +48,9 @@ export function useTrainingSessions(seedSessions: TrainingSession[]) {
   }, []);
 
   const loadRemoteSessions = useCallback(async () => {
+    setSource("loading");
+    setRemoteError(null);
+
     const localSessions = getTrainingSessions();
     const result = await getRemoteTrainingSessions();
 
@@ -99,6 +102,10 @@ export function useTrainingSessions(seedSessions: TrainingSession[]) {
   }, [loadRemoteSessions]);
 
   const sessions = useMemo(() => {
+    if (source === "loading") {
+      return [];
+    }
+
     if (remoteSessions && remoteSessions.length > 0) {
       return mergeTrainingSessions(
         markSessionsSource(remoteSessions, "remote"),
@@ -112,7 +119,12 @@ export function useTrainingSessions(seedSessions: TrainingSession[]) {
       markSessionsSource(storedSessions, "local-pending"),
       deletedIds,
     );
-  }, [deletedIds, remoteSessions, seedSessions, storedSessions]);
+  }, [deletedIds, remoteSessions, seedSessions, source, storedSessions]);
+
+  const isLoading = source === "loading";
+  const isSettled = !isLoading;
+  const isReady = isSettled;
+  const hasData = sessions.length > 0;
 
   return {
     sessions,
@@ -123,6 +135,11 @@ export function useTrainingSessions(seedSessions: TrainingSession[]) {
     source,
     syncMessage,
     remoteError,
+    error: remoteError,
+    isLoading,
+    isReady,
+    isSettled,
+    hasData,
     hasHydrated,
     async saveSession(session: TrainingSession) {
       try {

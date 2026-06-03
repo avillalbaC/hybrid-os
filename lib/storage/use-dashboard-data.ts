@@ -33,8 +33,12 @@ export function useDashboardData({
   const [remoteData, setRemoteData] = useState<DashboardDataResponse | null>(null);
   const [source, setSource] = useState<DashboardDataSource>("loading");
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const loadDashboardData = useCallback(async () => {
+    setSource("loading");
+    setError(null);
+
     try {
       const response = await fetch("/api/dashboard-data", { cache: "no-store" });
 
@@ -48,6 +52,7 @@ export function useDashboardData({
         setRemoteData(null);
         setSource("seed-fallback");
         setMessage("Supabase no tiene registros todavía. Mostrando seed histórico como fallback.");
+        setError(null);
         return;
       }
 
@@ -58,9 +63,12 @@ export function useDashboardData({
       });
       setSource("remote");
       setMessage(null);
-    } catch {
+      setError(null);
+    } catch (requestError) {
+      const errorMessage = requestError instanceof Error ? requestError.message : "No se pudo cargar Supabase.";
       setRemoteData(null);
       setSource("seed-fallback");
+      setError(errorMessage);
       setMessage("No se pudo cargar Supabase. Mostrando seed histórico como fallback.");
     }
   }, []);
@@ -76,13 +84,24 @@ export function useDashboardData({
   }, [loadDashboardData]);
 
   return useMemo(() => {
+    const isLoading = source === "loading";
+    const isSettled = !isLoading;
+    const isReady = isSettled;
+
     if (source === "remote" && remoteData) {
+      const hasData = hasAnyRemoteData(remoteData);
+
       return {
         sessions: remoteData.sessions ?? [],
         bodyChecks: remoteData.bodyChecks ?? [],
         nutritionChecks: remoteData.nutritionChecks ?? [],
         source,
         message,
+        error,
+        isLoading,
+        isReady,
+        isSettled,
+        hasData,
         refresh: loadDashboardData,
       };
     }
@@ -94,9 +113,16 @@ export function useDashboardData({
         nutritionChecks: [],
         source,
         message,
+        error,
+        isLoading,
+        isReady,
+        isSettled,
+        hasData: false,
         refresh: loadDashboardData,
       };
     }
+
+    const hasSeedData = Boolean(seedSessions.length || seedBodyChecks.length || seedNutritionChecks.length);
 
     return {
       sessions: seedSessions,
@@ -104,7 +130,12 @@ export function useDashboardData({
       nutritionChecks: seedNutritionChecks,
       source,
       message,
+      error,
+      isLoading,
+      isReady,
+      isSettled,
+      hasData: hasSeedData,
       refresh: loadDashboardData,
     };
-  }, [loadDashboardData, message, remoteData, seedBodyChecks, seedNutritionChecks, seedSessions, source]);
+  }, [error, loadDashboardData, message, remoteData, seedBodyChecks, seedNutritionChecks, seedSessions, source]);
 }

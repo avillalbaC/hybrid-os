@@ -5,68 +5,76 @@ Este roadmap refleja la direccion actual del proyecto. Mantiene el foco en datos
 ## Principios
 
 - Supabase es la fuente principal para datos reales.
+- Google Auth privado, `user_id`, backfill y RLS ya estan activos.
+- La app sigue cerrada a uso privado; no abrir multiusuario real todavia.
 - El seed historico es fallback/desarrollo.
 - `localStorage` es cola temporal, no fuente primaria.
 - El flujo importador no debe perder raw data ni payload completo.
 - Las pantallas prioritarias deben compartir criterios de periodos: semana calendario de lunes a domingo, mes calendario, ano calendario y todo el historial.
-- Evitar grandes features sin cerrar antes la capa de datos.
+- Evitar grandes features sin cerrar antes la experiencia de datos reales.
+- No tocar primary keys hasta resolver `db_id` interno y `session_id` logico por usuario.
 
-## v0.3 - Training Log + Training Detail
+## Estado ya completado
 
-Objetivo: convertir el historial de entrenamiento en la experiencia principal de consulta.
+- Supabase como fuente principal de datos reales.
+- Google Auth privado.
+- `user_id` anadido a las tablas principales.
+- Backfill de datos existentes al owner.
+- RLS activo.
+- APIs privadas protegidas.
+- Importador funcionando con `user_id`.
 
-Alcance:
+## v0.6.3 - Importador feedback limpio
 
-- Unificar lectura de sesiones con Supabase como fuente primaria.
-- Evitar mezcla de seed con datos reales cuando Supabase devuelve sesiones.
-- Mejorar filtros, busqueda y estados del Training Log.
-- Fortalecer `/training/[id]` para sesiones remotas.
-- Mostrar bloques, ejercicios, resultados, RPE, duracion, running, tags, patrones y notas con jerarquia clara.
-- Mantener export/import sin romper compatibilidad.
-
-## v0.4 - Running Analytics
-
-Objetivo: hacer que Running tenga analisis propio, no solo una lista filtrada.
-
-Alcance:
-
-- Metricas de distancia, duracion y tendencia por periodo.
-- Separar sesiones puras de running y sesiones hibridas con componente running.
-- Ranking o resumen de sesiones relevantes.
-- Evolucion historica sin usar "last 7 days" como semana principal.
-- Preparar datos para comparativas futuras.
-
-## v0.5 - Muscle Load Analysis
-
-Objetivo: profundizar el analisis muscular con datos reales y periodos consistentes.
-
-Alcance:
-
-- Consolidar resumen muscular por periodo.
-- Mejorar ranking de musculos y patrones de movimiento.
-- Distinguir carga reciente, acumulada y zonas con posible sobrecarga.
-- Reutilizar helpers de metricas y periodos.
-- Mantener BodyHeatmap como vista simple y util en esta fase.
-
-Decision BodyHeatmap para esta version:
-
-- No generar munecos por codigo.
-- Priorizar analisis legible: ranking, barras, intensidad y contexto.
-- Dejar el 3D para una fase asset-based posterior.
-
-## v0.6 - Importador mejorado
-
-Objetivo: hacer el importador mas robusto, diagnosticable y facil de corregir.
+Objetivo: hacer que el importador sea mas claro cuando valida, detecta duplicados, guarda o falla.
 
 Alcance:
 
 - Mensajes de error mas especificos por fase.
+- Warnings no bloqueantes separados de errores reales.
 - Mejor preview de sesiones, body checks y nutrition checks.
-- Mejor deteccion de duplicados en cliente sin depender de datos mezclados.
+- Estados claros de guardado, exito, duplicado y fallo.
 - Diagnostico seguro para fallos de escritura en Supabase.
-- Mantener guardado de `raw_imports`, `training_sessions`, `training_exercises`, `body_checks` y `nutrition_checks`.
+- Mantener guardado de `raw_imports`, `training_sessions`, `training_exercises`, `body_checks` y `nutrition_checks` con `user_id`.
 
-## v0.7 - Body/Nutrition desde Supabase
+## v0.6.4 - Loading states globales
+
+Objetivo: mejorar la percepcion de estabilidad y respuesta en las pantallas privadas.
+
+Alcance:
+
+- Loading states consistentes en Home, Dashboard, Training, Training Detail, Weekly, Running, Muscle Load e Import.
+- Estados vacios claros cuando no hay datos.
+- Estados de error comprensibles y accionables.
+- Evitar parpadeos entre seed/fallback y datos reales.
+- Respetar accesibilidad basica y `prefers-reduced-motion` si se anaden transiciones.
+
+## v0.7.0 - HybridOSAppInput v1.1 minimo
+
+Objetivo: introducir v1.1 de forma aditiva y sin romper inputs v1.0.
+
+Alcance:
+
+- Aceptar `appInputVersion` `"1.0"` y `"1.1"`.
+- Anadir campos opcionales de contexto: superficie, desnivel, zapatillas, frecuencia cardiaca y sintomas estructurados.
+- Usar `shoes` solo para sesiones `type === "running"`.
+- Tratar ausencia de `shoes` como warning no bloqueante en running, nunca como `pendingFields`.
+- Preservar campos nuevos en `payload` y `raw_imports`.
+- No crear columnas nuevas hasta validar uso real.
+
+## v0.7.1 - Volumen por zapatilla
+
+Objetivo: empezar a usar el campo de zapatillas para seguimiento practico de running.
+
+Alcance:
+
+- Calcular volumen por zapatilla desde sesiones running.
+- Usar distancia y fecha existentes en sesiones reales.
+- Mostrar resumen simple y util.
+- Mantener fallback si una sesion running no tiene zapatilla informada.
+- Evaluar si hace falta columna analitica o si basta con `payload`.
+
+## v0.8 - Body/Nutrition Supabase
 
 Objetivo: dejar de depender de mock/seed en Body y Nutrition.
 
@@ -78,7 +86,7 @@ Alcance:
 - Mostrar tendencias utiles sin convertir estas pantallas en prioridad mayor que training.
 - Reutilizar datos ya guardados por el importador.
 
-## v0.8 - Goals conectados
+## v0.9 - Goals
 
 Objetivo: conectar objetivos con datos reales del historial.
 
@@ -89,19 +97,23 @@ Alcance:
 - Mostrar progreso calculado desde datos reales.
 - Mantener el alcance simple antes de automatizaciones avanzadas.
 
-## v1.0 - Body Heatmap simple
+## v1.0 - App privada estable
 
-Objetivo: cerrar una primera version estable y util del mapa corporal sin 3D.
+Objetivo: cerrar una primera version privada estable para uso real.
 
 Alcance:
 
-- Vista simple basada en resumen muscular real.
-- Ranking de musculos y barras de intensidad.
-- Estados vacios claros.
-- Periodos consistentes con Dashboard y Muscle Load.
-- Sin muneco generado por codigo.
+- Experiencia privada consistente con Google Auth.
+- Datos reales servidos desde Supabase y protegidos por usuario.
+- Importador fiable para el flujo principal.
+- Pantallas prioritarias con loading, empty y error states claros.
+- Periodos consistentes en Dashboard, Training, Running y Muscle Load.
+- Sin multiusuario abierto.
+- Sin cambios destructivos de Supabase.
 
-## v1.1 - Body Heatmap 3D asset-based
+## Fases posteriores
+
+### Body Heatmap 3D asset-based
 
 Objetivo: introducir visualizacion corporal 3D solo cuando exista un asset adecuado.
 
@@ -117,32 +129,22 @@ No alcance:
 
 - Reintentar crear una anatomia completa con JSX, CSS, SVG improvisado o primitivas 3D generadas a mano.
 
-## v1.2 - PWA basica
+### PWA basica y offline sync
 
-Objetivo: mejorar instalacion y uso privado basico.
+Objetivo: mejorar instalacion y sincronizacion cuando la app privada ya sea estable.
 
 Alcance:
 
-- Manifest.
-- Iconos.
-- Configuracion minima de instalabilidad.
+- Manifest e iconos.
 - Estrategia prudente de cache.
-- Sin comprometer datos reales ni sincronizacion.
-
-## v1.3 - Offline sync
-
-Objetivo: formalizar la cola offline y sincronizacion.
-
-Alcance:
-
-- Convertir `localStorage` o una capa equivalente en cola explicita.
+- Cola offline explicita.
 - Estados claros: pendiente, sincronizado, error.
 - Reintentos seguros.
-- Resolucion de duplicados por `trainingSession.id`.
-- Evitar perdida de raw import y payload.
+- Resolucion de duplicados por usuario y session id.
 
 ## Fuera de alcance inmediato
 
+- Multiusuario real abierto.
 - Integraciones externas.
 - IA interna de analisis.
 - Cambios destructivos de Supabase.

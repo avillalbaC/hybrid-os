@@ -1,6 +1,6 @@
 # Hybrid OS - Current State
 
-Snapshot: 2026-05-28
+Snapshot: 2026-06-02
 
 Este documento describe el estado real del proyecto en este snapshot. No debe usarse para guardar metricas que cambian cada dia, salvo que se marquen explicitamente como snapshot.
 
@@ -8,32 +8,46 @@ Este documento describe el estado real del proyecto en este snapshot. No debe us
 
 Hybrid OS es una app privada de Next.js, TypeScript, Tailwind y Supabase para importar, consultar y analizar historial de entrenamiento hibrido.
 
-El flujo principal ya existe:
+El flujo principal sigue siendo:
 
 `HybridOSAppInput JSON -> validacion -> preview -> Supabase -> Dashboard / Training Log / Muscle Load`
 
-La app ya guarda entrenamientos reales en Supabase, pero la capa de lectura no esta totalmente unificada. El Dashboard usa Supabase como fuente principal de forma mas clara que otras pantallas. Varias rutas de entrenamiento todavia pasan por una mezcla de seed historico, datos remotos y cola local.
+Google Auth privado ya funciona. La app usa autenticacion real con Supabase Auth y acceso limitado al usuario autorizado. No se ha abierto multiusuario real.
+
+Supabase es la fuente principal para datos reales. El seed historico queda solo como fallback/desarrollo y `localStorage` queda solo como cola temporal para sesiones pendientes de sincronizacion.
+
+## Auth y acceso privado
+
+Estado actual:
+
+- Google Auth privado funciona.
+- El acceso sigue siendo privado, no multiusuario abierto.
+- Las rutas privadas de la app requieren sesion valida.
+- Las APIs privadas estan protegidas y requieren usuario autenticado.
+- `user_id` ya esta anadido a las tablas principales de datos.
+- El backfill de datos existentes al usuario owner ya esta hecho.
+- RLS esta activo.
+- Las lecturas y escrituras normales deben operar siempre en el contexto del usuario autenticado.
+
+Reglas que deben preservarse:
+
+- No abrir varios usuarios reales todavia.
+- No tocar primary keys todavia.
+- No usar `SUPABASE_SERVICE_ROLE_KEY` en cliente.
+- Mantener service role solo server-side y para tareas admin explicitas.
+- Antes de abrir multiusuario real, resolver la separacion entre `db_id` interno y `session_id` logico por usuario.
 
 ## Supabase
 
 Supabase es la fuente principal para datos reales.
 
-El cliente server-side esta en `lib/supabase/server.ts` y usa:
-
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-
-La service role key debe seguir solo en servidor. No debe exponerse en componentes, hooks cliente ni archivos publicos.
-
-El esquema documentado esta en `supabase/training_sessions.sql`.
-
 Tablas principales:
 
-- `training_sessions`: sesion completa, columnas analiticas y `payload` completo.
-- `raw_imports`: JSON original importado.
-- `training_exercises`: ejercicios normalizados por sesion y bloque.
-- `body_checks`: body checks opcionales importados.
-- `nutrition_checks`: nutrition checks opcionales importados.
+- `training_sessions`: sesion completa, columnas analiticas, `payload` completo y `user_id`.
+- `raw_imports`: JSON original importado y `user_id`.
+- `training_exercises`: ejercicios normalizados por sesion y bloque, con `user_id`.
+- `body_checks`: body checks opcionales importados, con `user_id` cuando existan.
+- `nutrition_checks`: nutrition checks opcionales importados, con `user_id` cuando existan.
 
 Columnas analiticas relevantes en `training_sessions`:
 
@@ -55,14 +69,12 @@ Estado actual por capa:
 - Seed historico: fallback/desarrollo, no debe mezclarse con Supabase cuando Supabase ya devuelve sesiones reales.
 - `localStorage`: cola temporal para sesiones pendientes de sincronizacion o respaldo si falla Supabase.
 
-Lecturas actuales:
+Politica vigente:
 
-- `useDashboardData`: lee `/api/dashboard-data`; usa Supabase primero y fallback solo si falla o no hay datos.
-- `useTrainingSessions`: lee `/api/training-sessions`, lee `localStorage`, intenta migrar pendientes y mezcla con seed por `id`.
-
-Pendiente importante:
-
-- Unificar Home, Training Log, Training Detail, Weekly, Running y Muscle Load con la misma politica que Dashboard: Supabase primero, seed solo fallback y `localStorage` solo como cola pendiente.
+- Cuando Supabase devuelve datos reales, las pantallas prioritarias deben usar esos datos.
+- El seed no debe aparecer mezclado con datos reales.
+- `localStorage` no debe tratarse como fuente equivalente; solo como pendientes.
+- Las APIs y helpers deben filtrar por `user_id` o por el usuario autenticado.
 
 ## Rutas existentes
 
@@ -76,45 +88,47 @@ Pendiente importante:
 - `/training/running`: vista de running.
 - `/training/import`: importador JSON.
 - `/muscle-load`: analisis de carga muscular.
-- `/body`: pantalla Body, actualmente basada en mock/seed.
-- `/nutrition`: pantalla Nutrition, actualmente basada en mock/seed.
-- `/goals`: pantalla Goals, actualmente basada en mock/seed.
+- `/body`: pantalla Body, actualmente no es prioridad.
+- `/nutrition`: pantalla Nutrition, actualmente no es prioridad.
+- `/goals`: pantalla Goals, actualmente no es prioridad.
 
 ### API
 
-- `GET /api/training-sessions`: lista sesiones desde Supabase.
-- `PUT /api/training-sessions/:id`: guarda o actualiza una sesion.
-- `DELETE /api/training-sessions/:id`: elimina una sesion.
-- `POST /api/imports`: importa uno o varios `HybridOSAppInput`.
-- `GET /api/dashboard-data`: devuelve sesiones, body checks y nutrition checks para Dashboard.
+- `GET /api/training-sessions`: lista sesiones propias desde Supabase.
+- `PUT /api/training-sessions/:id`: guarda o actualiza una sesion propia.
+- `DELETE /api/training-sessions/:id`: elimina una sesion propia.
+- `POST /api/imports`: importa uno o varios `HybridOSAppInput` para el usuario autenticado.
+- `GET /api/dashboard-data`: devuelve sesiones, body checks y nutrition checks del usuario autenticado para Dashboard.
 
-Las rutas API estan protegidas por el login privado local actual.
+Las rutas API privadas estan protegidas por Supabase Auth y deben respetar RLS.
 
 ## Flujo importador
 
 Flujo actual:
 
-1. El usuario abre `/training/import`.
+1. El usuario autenticado abre `/training/import`.
 2. Pega un `HybridOSAppInput` o un array de inputs.
 3. `parseHybridOSJsonInput()` valida estructura, enums, metricas, bloques, ejercicios, body check opcional y nutrition check opcional.
 4. La UI muestra preview antes de guardar.
 5. La UI detecta posibles duplicados usando las sesiones disponibles en cliente.
-6. Al guardar, llama a `saveRemoteAppInputs()`.
+6. Al guardar, llama a la API privada de imports.
 7. `POST /api/imports` vuelve a validar en servidor.
-8. El servidor evita duplicados por `trainingSession.id`.
-9. Si no hay duplicado, guarda:
-   - `raw_imports`
-   - `training_sessions`
-   - `training_exercises`
-   - `body_checks`, si existe
-   - `nutrition_checks`, si existe
-10. El cliente notifica actualizacion remota para refrescar vistas dependientes.
+8. El servidor opera en contexto del usuario autenticado.
+9. El servidor evita duplicados por usuario y session id.
+10. Si no hay duplicado, guarda con `user_id`:
+    - `raw_imports`
+    - `training_sessions`
+    - `training_exercises`
+    - `body_checks`, si existe
+    - `nutrition_checks`, si existe
+11. El cliente notifica actualizacion remota para refrescar vistas dependientes.
 
 Reglas que deben preservarse:
 
 - Guardar siempre el raw import.
 - Guardar siempre el `payload` completo de la sesion.
-- No reemplazar ids reales si representan la misma sesion.
+- Guardar `user_id` en todas las tablas afectadas por imports.
+- No reemplazar ids reales si representan la misma sesion del mismo usuario.
 - No reducir el modelo a campos simples.
 - Mantener metricas historicas necesarias para comparativas: distancia, duracion, RPE, resumen muscular, patrones de movimiento, ejercicios y raw import.
 
@@ -122,10 +136,16 @@ Reglas que deben preservarse:
 
 - App base con Next.js, TypeScript y Tailwind.
 - Navegacion principal y rutas prioritarias de entrenamiento.
-- Login privado local para desarrollo.
+- Google Auth privado con Supabase.
+- Acceso privado protegido.
+- `user_id` anadido a las tablas principales.
+- Backfill de datos existentes al owner.
+- RLS activo.
+- APIs privadas protegidas.
 - Modelo `HybridOSAppInput` y `TrainingSession`.
 - Validacion cliente y servidor del importador.
 - Preview del importador.
+- Importador funcional con `user_id`.
 - Persistencia en Supabase de sesiones, raw imports, ejercicios, body checks y nutrition checks.
 - Endpoint dedicado para Dashboard.
 - Dashboard con periodos calendarizados y metricas agregadas.
@@ -134,17 +154,15 @@ Reglas que deben preservarse:
 
 ## Pendiente
 
-- Unificar la capa de datos de entrenamiento para que Supabase sea la fuente primaria en todas las pantallas prioritarias.
-- Evitar que seed historico se mezcle con datos reales cuando Supabase ya devuelve sesiones.
-- Convertir `localStorage` en cola temporal clara, no en fuente equivalente.
-- Mejorar Training Log y Training Detail como experiencia principal de consulta.
-- Profundizar Running Analytics.
-- Profundizar Muscle Load Analysis sobre datos reales y periodos consistentes.
-- Mejorar diagnostico y trazabilidad de errores del importador.
-- Conectar `/body` y `/nutrition` a Supabase.
+- Mejorar feedback limpio del importador: errores, warnings, duplicados y estados de guardado.
+- Anadir loading states globales y consistentes en pantallas prioritarias.
+- Implementar `HybridOSAppInput` v1.1 minimo.
+- Incorporar `shoes` para sesiones de running en v1.1.
+- Preparar volumen por zapatilla.
+- Conectar `/body` y `/nutrition` a Supabase como siguiente bloque no prioritario de training.
 - Conectar `/goals` a datos reales.
 - Decidir e integrar un asset GLB real para BodyHeatmap 3D en una fase futura.
-- Anadir pruebas automaticas para el flujo critico de importacion, fuente de datos y fallback.
+- Anadir pruebas automaticas para el flujo critico de importacion, fuente de datos, auth/RLS y fallback.
 
 ## Decision BodyHeatmap
 

@@ -1,17 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { dashboardPeriods, filterSessionsByPeriod, type DashboardPeriod } from "@/lib/domain/dashboard/periods";
+import { getSecondaryActivityKind, isSecondaryActivity } from "@/lib/domain/training/secondary-activity";
 import { calculateRunningKm, calculateTotalDuration } from "@/lib/selectors/training";
 import { useTrainingSessions, type TrainingSessionWithSync } from "@/lib/storage/use-training-sessions";
 import { formatDataQuality, formatTag, formatTrainingType } from "@/lib/utils/format";
 import type { TrainingSession, TrainingSessionType } from "@/types/training";
 
-type TypeFilter = "all" | TrainingSessionType | "recovery";
+type TypeFilter = "all" | TrainingSessionType | "recovery" | "secondary" | "padel" | "routes-walks";
 type SortMode = "recent" | "oldest" | "duration" | "rpe";
 
 type SessionGroup = {
@@ -30,6 +31,9 @@ const typeFilters: Array<{ value: TypeFilter; label: string }> = [
   { value: "halterofilia", label: "Halterofilia" },
   { value: "gimnasticos", label: "Gimnásticos" },
   { value: "recovery", label: "Movilidad / recovery" },
+  { value: "secondary", label: "Actividad secundaria" },
+  { value: "padel", label: "Pádel" },
+  { value: "routes-walks", label: "Rutas/caminatas" },
 ];
 
 const sortModes: Array<{ value: SortMode; label: string }> = [
@@ -53,6 +57,19 @@ function matchesTypeFilter(session: TrainingSession, filter: TypeFilter) {
 
   if (filter === "recovery") {
     return session.type === "movilidad" || session.subtypes.includes("mobility") || session.tags.some((tag) => ["mobility", "recovery", "movilidad"].includes(tag));
+  }
+
+  if (filter === "secondary") {
+    return isSecondaryActivity(session);
+  }
+
+  if (filter === "padel") {
+    return isSecondaryActivity(session) && getSecondaryActivityKind(session) === "padel";
+  }
+
+  if (filter === "routes-walks") {
+    const kind = getSecondaryActivityKind(session);
+    return isSecondaryActivity(session) && (kind === "route" || kind === "walking" || kind === "hiking");
   }
 
   return session.type === filter;
@@ -246,6 +263,14 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
   const [period, setPeriod] = useState<DashboardPeriod>("all");
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("recent");
+
+  useEffect(() => {
+    const filter = new URLSearchParams(window.location.search).get("filter");
+
+    if (filter === "secondary" || filter === "padel" || filter === "routes-walks") {
+      setTypeFilter(filter);
+    }
+  }, []);
 
   const filteredSessions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

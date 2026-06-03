@@ -8,7 +8,7 @@ export default function ImportTrainingPage() {
       <PageHeader
         eyebrow="Importar entrenamiento"
         title="Importar entrenamiento por JSON"
-        description="Pega un appInput normalizado, valida la estructura básica y revisa una previsualización antes de que exista guardado real."
+        description="Pega un appInput normalizado, valida la estructura, simula el guardado si quieres comprobar duplicados y guarda en Supabase cuando esté listo."
       />
       <JsonImportForm seedSessions={trainingSessions} />
     </>

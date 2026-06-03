@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
 import { isAllowedAuthEmail } from "@/lib/auth/allow-list";
+import { getDevBypassUser } from "@/lib/auth/dev-auth-bypass";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function requireAllowedUser() {
+  const devBypassUser = getDevBypassUser();
+
+  if (devBypassUser) {
+    return {
+      ok: true as const,
+      user: devBypassUser,
+    };
+  }
+
   let supabase: ReturnType<typeof createSupabaseServerClient>;
 
   try {

@@ -8,7 +8,7 @@ import {
   upsertNutritionCheck,
   upsertRemoteTrainingSession,
 } from "@/lib/supabase/training-sessions";
-import { coercePartialSession, validateHistoricalSessions, type ValidationIssue } from "@/lib/validation/hybrid-os-input";
+import { coercePartialSession, normalizeHybridOSInput, validateHistoricalSessions, type ValidationIssue } from "@/lib/validation/hybrid-os-input";
 import type { HybridOSAppInput, SessionStatus, TrainingSession } from "@/types/training";
 
 const importableStatuses: SessionStatus[] = ["completed", "partial"];
@@ -77,8 +77,10 @@ async function runImportPhase<T>(phase: ImportPhase, operation: () => Promise<T>
 
 export type SaveAppInputsResult = {
   ok: true;
+  dryRun: boolean;
   totalFound: number;
   imported: number;
+  wouldImport: number;
   skippedDuplicate: string[];
   skippedInvalidStatus: Array<{ id: string; status: SessionStatus }>;
   errors: Array<{ id: string } & SerializedImportError>;
@@ -87,10 +89,12 @@ export type SaveAppInputsResult = {
   savedBodyCheckIds: string[];
   savedNutritionCheckIds: string[];
   validationWarnings: ValidationIssue[];
+  phases: ImportPhase[];
 };
 
 export type SaveAppInputsOptions = {
   duplicateMode?: "error" | "skip" | "upsert";
+  dryRun?: boolean;
   sourceLabel?: string;
   userId?: string;
 };
@@ -121,9 +125,16 @@ function exerciseCount(session: TrainingSession) {
   return session.blocks.reduce((total, block) => total + block.exercises.length, 0);
 }
 
+function addPhase(phases: ImportPhase[], phase: ImportPhase) {
+  if (!phases.includes(phase)) {
+    phases.push(phase);
+  }
+}
+
 export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOptions = {}): Promise<SaveAppInputsResult> {
   console.info("[Hybrid OS import] validation: start");
-  const validation = validateHistoricalSessions(rawInputs);
+  const normalization = normalizeHybridOSInput(rawInputs);
+  const validation = validateHistoricalSessions(normalization.normalizedInput);
 
   if (!validation.ok || !validation.value) {
     console.error("[Hybrid OS import] validation: failed", validation.errors);
@@ -135,8 +146,10 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
 
   const result: SaveAppInputsResult = {
     ok: true,
+    dryRun: Boolean(options.dryRun),
     totalFound: validation.value.length,
     imported: 0,
+    wouldImport: 0,
     skippedDuplicate: [],
     skippedInvalidStatus: [],
     errors: [],
@@ -144,7 +157,8 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
     savedExercises: 0,
     savedBodyCheckIds: [],
     savedNutritionCheckIds: [],
-    validationWarnings: validation.warnings,
+    validationWarnings: [...normalization.warnings, ...validation.warnings],
+    phases: [],
   };
 
   for (const input of validation.value.map((item) => withImportSource(item, options.sourceLabel))) {
@@ -160,7 +174,7 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
       const shouldUpsertSession = Boolean(existingSession) && options.duplicateMode === "upsert";
 
       if (existingSession) {
-        if (options.duplicateMode === "skip") {
+        if (options.dryRun || options.duplicateMode === "skip") {
           result.skippedDuplicate.push(sessionId);
           continue;
         }
@@ -176,27 +190,55 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
       const savedBodyCheckIds: string[] = [];
       const savedNutritionCheckIds: string[] = [];
 
+      if (options.dryRun) {
+        addPhase(result.phases, "raw_imports");
+        addPhase(result.phases, "training_sessions");
+        addPhase(result.phases, "training_exercises");
+
+        if (input.bodyCheck) {
+          addPhase(result.phases, "body_checks");
+          savedBodyCheckIds.push(input.bodyCheck.id);
+        }
+
+        if (input.nutritionCheck) {
+          addPhase(result.phases, "nutrition_checks");
+          savedNutritionCheckIds.push(input.nutritionCheck.id);
+        }
+
+        result.wouldImport += 1;
+        result.importedIds.push(session.id);
+        result.savedExercises += exerciseCount(session);
+        result.savedBodyCheckIds.push(...savedBodyCheckIds);
+        result.savedNutritionCheckIds.push(...savedNutritionCheckIds);
+        continue;
+      }
+
       const persistedSession = await runImportPhase("training_sessions", () =>
         shouldUpsertSession ? upsertRemoteTrainingSession(session, options.userId) : insertRemoteTrainingSession(session, options.userId),
       );
       const persistedSessionId = persistedSession.id;
+      addPhase(result.phases, "training_sessions");
 
       await runImportPhase("raw_imports", () => insertRawImport(input, persistedSessionId, options.userId));
+      addPhase(result.phases, "raw_imports");
       console.info("[Hybrid OS import] metrics: ok");
       console.info("[Hybrid OS import] muscle_loads: ok");
       await runImportPhase("training_exercises", () =>
         shouldUpsertSession ? replaceTrainingExercises(session, options.userId) : insertTrainingExercises(session, options.userId),
       );
+      addPhase(result.phases, "training_exercises");
 
       if (input.bodyCheck) {
         const bodyCheck = input.bodyCheck;
         await runImportPhase("body_checks", () => upsertBodyCheck(bodyCheck, options.userId));
+        addPhase(result.phases, "body_checks");
         savedBodyCheckIds.push(bodyCheck.id);
       }
 
       if (input.nutritionCheck) {
         const nutritionCheck = input.nutritionCheck;
         await runImportPhase("nutrition_checks", () => upsertNutritionCheck(nutritionCheck, options.userId));
+        addPhase(result.phases, "nutrition_checks");
         savedNutritionCheckIds.push(nutritionCheck.id);
       }
 

@@ -134,8 +134,12 @@ Campos:
 
 Reglas:
 
-- Guardar el nombre/modelo de zapatilla como texto libre.
-- Omitir `equipment` si no hay material relevante.
+- Usar `shoes` solo para sesiones `trainingSession.type === "running"`.
+- Guardar el nombre/modelo de zapatilla como texto libre en sesiones de running.
+- Omitir `equipment` si no hay material relevante o si la sesion no es running.
+- No usar `shoes` para CrossFit, HYROX, fuerza, halterofilia, gimnasticos u otras sesiones no running.
+- Si una sesion running no trae `shoes`, el importador futuro puede mostrar warning no bloqueante.
+- La ausencia de `shoes` no debe bloquear importacion, degradar `dataQuality` ni anadirse a `pendingFields`.
 - No mover cargas, ergometros ni implements aqui; esos siguen en ejercicios y bloques.
 
 ### `heartRate`
@@ -283,6 +287,8 @@ No anadir calorias como `pendingField` obligatorio. Si faltan calorias, normalme
 
 `pendingFields` debe seguir reservado para datos criticos que cambian la interpretacion de la sesion o impiden compararla bien.
 
+v1.1 no debe introducir nuevos `pendingFields`.
+
 Mantener como candidatos principales:
 
 - `RPE exacto`
@@ -298,7 +304,7 @@ Otros pendingFields existentes pueden seguir usandose si el dato es realmente cr
 - Frecuencia cardiaca ausente.
 - Calorias ausentes.
 
-Esos datos secundarios pueden omitirse o anotarse en `importNotes` sin bloquear.
+Esos datos secundarios pueden omitirse o anotarse en `importNotes` sin bloquear. Para running, la ausencia de zapatillas puede mostrarse como warning no bloqueante del importador, pero nunca como `pendingFields`.
 
 ## Validacion futura sugerida
 
@@ -311,7 +317,9 @@ Cuando se implemente v1.1, el validador deberia:
   - `heartRate.averageBpm` es mayor que `heartRate.maxBpm`.
   - `symptoms[].severity` esta fuera de 0-10.
   - `environment.elevationGainMeters` o `environment.elevationLossMeters` son negativos.
-- No generar warnings por ausencia de campos v1.1.
+- Emitir warning no bloqueante si una sesion `type === "running"` no incluye `equipment.shoes`.
+- No generar warnings por ausencia de campos v1.1 en sesiones no running.
+- No convertir campos v1.1 ausentes en `pendingFields`.
 - Preservar todos los campos nuevos en `payload` y `raw_imports`.
 
 ## Supabase
@@ -343,7 +351,8 @@ No usar `DROP`, `TRUNCATE`, mass `DELETE` ni migraciones destructivas.
 - Version raiz: usar `"1.1"` para inputs nuevos que incluyan estos campos.
 - Compatibilidad: aceptar `"1.0"` y `"1.1"` cuando se implemente.
 - Ubicacion: campos nuevos dentro de `trainingSession`.
+- Zapatillas: `equipment.shoes` solo aplica a sesiones running.
 - Calorias: sin cambios; mantener en `sessionMetrics.totalCalories` y `exercise.calories`.
 - Molestias: conservar `soreness` e `injuryNotes`; anadir `symptoms` opcional para estructura.
 - Persistencia inicial: payload/raw import, sin schema nuevo todavia.
-- `pendingFields`: solo datos criticos, no contexto secundario.
+- `pendingFields`: solo datos criticos, no contexto secundario ni ausencia de zapatillas.

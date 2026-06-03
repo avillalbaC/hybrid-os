@@ -4,15 +4,50 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { SkeletonBlock } from "@/components/ui/skeleton";
 import { TrainingSessionCard } from "@/components/training/training-session-card";
 import { getDisciplineSummaries } from "@/lib/domain/training/disciplines";
 import { formatDate, formatMuscleName, formatTrainingType } from "@/lib/utils/format";
 import type { TrainingSession, TrainingSessionType } from "@/types/training";
 
-export function DisciplinesOverview({ sessions }: { sessions: TrainingSession[] }) {
+export function DisciplinesOverview({
+  isLoading = false,
+  sessions,
+}: {
+  isLoading?: boolean;
+  sessions: TrainingSession[];
+}) {
   const summaries = useMemo(() => getDisciplineSummaries(sessions), [sessions]);
   const [selectedType, setSelectedType] = useState<TrainingSessionType | null>(null);
   const selectedSummary = summaries.find((summary) => summary.type === selectedType) ?? summaries[0] ?? null;
+
+  if (isLoading) {
+    return (
+      <section className="mt-8" aria-label="Disciplinas calculando">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Disciplinas</p>
+            <h3 className="mt-2 text-2xl font-black tracking-tight">Sesiones por disciplina</h3>
+            <SkeletonBlock className="mt-3 h-4 w-80 max-w-full" />
+          </div>
+          <SkeletonBlock className="h-10 w-28" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="rounded-md border border-[var(--line)] bg-[linear-gradient(180deg,var(--panel-strong),var(--panel))] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.22)]">
+              <SkeletonBlock className="h-5 w-32" />
+              <SkeletonBlock className="mt-3 h-4 w-24" />
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <SkeletonBlock className="h-14" />
+                <SkeletonBlock className="h-14" />
+                <SkeletonBlock className="h-14" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   if (summaries.length === 0) {
     return (
@@ -70,7 +105,7 @@ export function DisciplinesOverview({ sessions }: { sessions: TrainingSession[] 
                 </div>
                 <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-2">
                   <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">RPE</dt>
-                  <dd className="mt-1 font-mono font-black">{summary.averageRpe || "-"}</dd>
+                  <dd className="mt-1 font-mono font-black">{summary.averageRpe || "Sin dato"}</dd>
                 </div>
                 <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-2">
                   <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Horas</dt>

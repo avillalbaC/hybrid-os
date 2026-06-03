@@ -128,6 +128,7 @@ export function getAverageHeartRate(session: TrainingSession) {
 
 export function getRunningSessionRows(sessions: TrainingSession[]): RunningSessionRow[] {
   return sessions
+    .filter(isPureRunningSession)
     .map((session) => {
       const runMeters = getSessionRunMeters(session);
       const durationMinutes = session.durationMinutes;

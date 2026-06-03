@@ -17,7 +17,13 @@ const routeContext = [
   { prefix: "/", period: "Estado actual", source: "Supabase primero" },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  devAuthBypassEnabled = false,
+}: {
+  children: React.ReactNode;
+  devAuthBypassEnabled?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -42,8 +48,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   async function handleSignOut() {
-    const supabase = createSupabaseBrowserClient();
-    await supabase.auth.signOut();
+    if (!devAuthBypassEnabled) {
+      const supabase = createSupabaseBrowserClient();
+      await supabase.auth.signOut();
+    }
+
     router.push("/login");
     router.refresh();
   }
@@ -133,9 +142,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 Importar
               </Link>
-              <span className="hidden h-9 items-center rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.02)] px-3 text-sm font-bold text-[var(--muted-strong)] sm:inline-flex">
-                Google Auth
-              </span>
+              {devAuthBypassEnabled ? (
+                <span className="hidden h-9 items-center rounded-md border border-amber-300/30 bg-amber-300/10 px-3 text-sm font-bold text-amber-100 sm:inline-flex">
+                  Dev auth bypass
+                </span>
+              ) : (
+                <span className="hidden h-9 items-center rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.02)] px-3 text-sm font-bold text-[var(--muted-strong)] sm:inline-flex">
+                  Google Auth
+                </span>
+              )}
             </div>
           </div>
         </header>

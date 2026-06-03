@@ -41,16 +41,32 @@ export type ImportIssue = {
   path: string;
   message: string;
   receivedValue?: unknown;
+  normalizedValue?: unknown;
   allowedValues?: string[];
   suggestion?: string;
+};
+
+export type NormalizationChange = {
+  path: string;
+  before: unknown;
+  after: unknown;
+  message: string;
+};
+
+export type NormalizeHybridOSInputResult = {
+  normalizedInput: unknown;
+  warnings: ValidationIssue[];
+  changes: NormalizationChange[];
 };
 
 export type ImportValidationResult = {
   valid: boolean;
   errors: ImportIssue[];
   warnings: ImportIssue[];
+  normalizationChanges: ImportIssue[];
   parsed?: HybridOSAppInput[];
   repairedText?: string;
+  normalizedText?: string;
   autoRepaired?: boolean;
   repairFixes?: string[];
   rawParseError?: string;
@@ -216,6 +232,325 @@ function validateEnum<T extends string>(value: unknown, allowed: T[], path: stri
     code: "enum",
   });
   return false;
+}
+
+function cloneJsonValue(value: unknown) {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value)) as unknown;
+}
+
+function formatNormalizationValue(value: unknown) {
+  return typeof value === "string" ? `"${value}"` : JSON.stringify(value);
+}
+
+function normalizePathPattern(path: string) {
+  return path
+    .replace(/\[\d+\]/g, "[]")
+    .replace(/\.?\d+\./g, ".[].")
+    .replace(/\.\d+$/g, ".[]")
+    .replace(/\.\[\]/g, "[]")
+    .replace(/^\[\]\./, "");
+}
+
+function recordNormalization(
+  changes: NormalizationChange[],
+  warnings: ValidationIssue[],
+  path: string,
+  before: unknown,
+  after: unknown,
+  message: string,
+) {
+  if (Object.is(before, after)) {
+    return;
+  }
+
+  changes.push({ path, before, after, message });
+  warnings.push({
+    path,
+    message,
+    receivedValue: before,
+    suggestion: `${formatNormalizationValue(before)} -> ${formatNormalizationValue(after)}`,
+    code: "type",
+  });
+}
+
+function parseSafeNumericString(value: string) {
+  const trimmed = value.trim();
+
+  if (/^-?\d+,\d+$/.test(trimmed)) {
+    return Number(trimmed.replace(",", "."));
+  }
+
+  if (/^-?\d+\.\d+$/.test(trimmed)) {
+    if (/^-?\d{1,3}\.\d{3}$/.test(trimmed)) {
+      return null;
+    }
+
+    return Number(trimmed);
+  }
+
+  if (/^-?\d+$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+
+  return null;
+}
+
+function normalizeDateValue(value: unknown) {
+  const text = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
+
+  if (!/^\d{8}$/.test(text)) {
+    return null;
+  }
+
+  const year = Number(text.slice(0, 4));
+  const month = Number(text.slice(4, 6));
+  const day = Number(text.slice(6, 8));
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+    return null;
+  }
+
+  return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+}
+
+function normalizeBooleanValue(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "true" || normalized === "yes") return true;
+  if (normalized === "false" || normalized === "no") return false;
+  return null;
+}
+
+const safeStringPathPatterns = new Set([
+  "trainingSession.title",
+  "trainingSession.notes",
+  "trainingSession.objective",
+  "trainingSession.rawText",
+  "trainingSession.location",
+  "trainingSession.feeling",
+  "trainingSession.injuryNotes",
+  "trainingSession.importNotes",
+  "trainingSession.result.score",
+  "trainingSession.result.notes",
+  "trainingSession.blocks[].name",
+  "trainingSession.blocks[].notes",
+  "trainingSession.blocks[].blockResult",
+  "trainingSession.blocks[].exercises[].name",
+  "trainingSession.blocks[].exercises[].canonicalName",
+  "trainingSession.blocks[].exercises[].notes",
+  "bodyCheck.notes",
+  "nutritionCheck.notes",
+]);
+
+const nullableStringPathPatterns = new Set([
+  "trainingSession.notes",
+  "trainingSession.objective",
+  "trainingSession.location",
+  "trainingSession.feeling",
+  "trainingSession.injuryNotes",
+  "trainingSession.importNotes",
+  "trainingSession.result.score",
+  "trainingSession.result.notes",
+  "trainingSession.blocks[].notes",
+  "trainingSession.blocks[].blockResult",
+  "trainingSession.blocks[].exercises[].notes",
+  "trainingSession.equipment.shoes",
+  "bodyCheck.notes",
+  "nutritionCheck.notes",
+]);
+
+const numberPathPatterns = new Set([
+  "trainingSession.durationMinutes",
+  "trainingSession.rpe",
+  "trainingSession.result.timeSeconds",
+  "trainingSession.result.capMinutes",
+  "trainingSession.sessionMetrics.totalRunMeters",
+  "trainingSession.sessionMetrics.totalBikeMeters",
+  "trainingSession.sessionMetrics.totalRowMeters",
+  "trainingSession.sessionMetrics.totalSkiMeters",
+  "trainingSession.sessionMetrics.totalCalories",
+  "trainingSession.sessionMetrics.totalExternalLoadKg",
+  "trainingSession.sessionMetrics.totalBarbellReps",
+  "trainingSession.sessionMetrics.totalDumbbellReps",
+  "trainingSession.sessionMetrics.totalKettlebellReps",
+  "trainingSession.sessionMetrics.totalGymnasticsReps",
+  "trainingSession.sessionMetrics.hardSetsEstimate",
+  "trainingSession.sessionMetrics.impactScore",
+  "trainingSession.sessionMetrics.cardioLoad",
+  "trainingSession.sessionMetrics.strengthLoad",
+  "trainingSession.sessionMetrics.technicalLoad",
+  "trainingSession.sessionMetrics.fatigueCost",
+  "trainingSession.sessionMuscleSummary.quadriceps",
+  "trainingSession.sessionMuscleSummary.hamstrings",
+  "trainingSession.sessionMuscleSummary.glutes",
+  "trainingSession.sessionMuscleSummary.calves",
+  "trainingSession.sessionMuscleSummary.hipFlexors",
+  "trainingSession.sessionMuscleSummary.adductors",
+  "trainingSession.sessionMuscleSummary.core",
+  "trainingSession.sessionMuscleSummary.lowerBack",
+  "trainingSession.sessionMuscleSummary.lats",
+  "trainingSession.sessionMuscleSummary.upperBack",
+  "trainingSession.sessionMuscleSummary.traps",
+  "trainingSession.sessionMuscleSummary.shoulders",
+  "trainingSession.sessionMuscleSummary.chest",
+  "trainingSession.sessionMuscleSummary.triceps",
+  "trainingSession.sessionMuscleSummary.biceps",
+  "trainingSession.sessionMuscleSummary.forearms",
+  "trainingSession.blocks[].roundsPlanned",
+  "trainingSession.blocks[].roundsCompleted",
+  "trainingSession.blocks[].timeCapMinutes",
+  "trainingSession.blocks[].restSeconds",
+  "trainingSession.blocks[].exercises[].sets",
+  "trainingSession.blocks[].exercises[].reps",
+  "trainingSession.blocks[].exercises[].distanceMeters",
+  "trainingSession.blocks[].exercises[].durationSeconds",
+  "trainingSession.blocks[].exercises[].calories",
+  "trainingSession.blocks[].exercises[].loadKg",
+  "trainingSession.blocks[].exercises[].muscleLoad[].load",
+  "bodyCheck.weightKg",
+  "bodyCheck.waistCm",
+  "bodyCheck.steps",
+  "bodyCheck.sleepHours",
+  "bodyCheck.energy",
+  "bodyCheck.hunger",
+  "nutritionCheck.targetCalories",
+  "nutritionCheck.estimatedCalories",
+  "nutritionCheck.targetProteinGrams",
+  "nutritionCheck.estimatedProteinGrams",
+  "nutritionCheck.waterLiters",
+  "nutritionCheck.adherencePercent",
+]);
+
+const integerPathPatterns = new Set([
+  "trainingSession.durationMinutes",
+  "trainingSession.rpe",
+]);
+
+const stringArrayPathPatterns = new Set([
+  "trainingSession.tags",
+  "trainingSession.subtypes",
+  "trainingSession.pendingFields",
+  "trainingSession.soreness",
+  "bodyCheck.pendingFields",
+  "nutritionCheck.pendingFields",
+]);
+
+const booleanPathPatterns = new Set([
+  "trainingSession.result.completedAsPlanned",
+  "trainingSession.blocks[].exercises[].completed",
+  "trainingSession.blocks[].exercises[].synch",
+  "trainingSession.blocks[].exercises[].sharedWork",
+  "trainingSession.blocks[].exercises[].unilateral",
+]);
+
+const datePathPatterns = new Set([
+  "trainingSession.date",
+  "trainingSession.reportedAt",
+  "bodyCheck.date",
+  "nutritionCheck.date",
+]);
+
+function normalizeValueAtPath(value: unknown, path: string, changes: NormalizationChange[], warnings: ValidationIssue[]) {
+  const normalizedPath = normalizePathPattern(path);
+  let nextValue = value;
+
+  if (nullableStringPathPatterns.has(normalizedPath) && value === "") {
+    recordNormalization(changes, warnings, path, value, null, "Campo vacío convertido a null.");
+    return null;
+  }
+
+  if (datePathPatterns.has(normalizedPath)) {
+    const normalizedDate = normalizeDateValue(value);
+
+    if (normalizedDate) {
+      recordNormalization(changes, warnings, path, value, normalizedDate, "Fecha numérica normalizada a YYYY-MM-DD.");
+      return normalizedDate;
+    }
+  }
+
+  if (safeStringPathPatterns.has(normalizedPath) && (typeof value === "number" || typeof value === "boolean")) {
+    nextValue = String(value);
+    recordNormalization(changes, warnings, path, value, nextValue, "Valor convertido a string en un campo seguro.");
+    return nextValue;
+  }
+
+  if (stringArrayPathPatterns.has(normalizedPath) && typeof value === "string") {
+    nextValue = value.trim().length > 0 ? [value] : [];
+    recordNormalization(changes, warnings, path, value, nextValue, "String convertido a array de strings.");
+    return nextValue;
+  }
+
+  if (numberPathPatterns.has(normalizedPath) && typeof value === "string") {
+    const parsedNumber = parseSafeNumericString(value);
+
+    if (parsedNumber !== null && Number.isFinite(parsedNumber)) {
+      nextValue = parsedNumber;
+      recordNormalization(changes, warnings, path, value, nextValue, "String numérica convertida a number.");
+    }
+  }
+
+  if (integerPathPatterns.has(normalizedPath) && typeof nextValue === "number" && Number.isFinite(nextValue) && !Number.isInteger(nextValue)) {
+    const rounded = Math.round(nextValue);
+    recordNormalization(changes, warnings, path, nextValue, rounded, "Decimal redondeado al entero requerido para Supabase.");
+    return rounded;
+  }
+
+  if (booleanPathPatterns.has(normalizedPath)) {
+    const parsedBoolean = normalizeBooleanValue(value);
+
+    if (parsedBoolean !== null) {
+      recordNormalization(changes, warnings, path, value, parsedBoolean, "String convertido a boolean.");
+      return parsedBoolean;
+    }
+  }
+
+  return nextValue;
+}
+
+function normalizeRecordValues(value: unknown, path: string, changes: NormalizationChange[], warnings: ValidationIssue[]): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item, index) => normalizeRecordValues(item, path ? `${path}.${index}` : `${index}`, changes, warnings));
+  }
+
+  if (!isRecord(value)) {
+    return normalizeValueAtPath(value, path, changes, warnings);
+  }
+
+  const result: Record<string, unknown> = {};
+
+  Object.entries(value).forEach(([key, childValue]) => {
+    const childPath = path ? `${path}.${key}` : key;
+    result[key] = normalizeRecordValues(childValue, childPath, changes, warnings);
+  });
+
+  return result;
+}
+
+export function normalizeHybridOSInput(input: unknown): NormalizeHybridOSInputResult {
+  const warnings: ValidationIssue[] = [];
+  const changes: NormalizationChange[] = [];
+  const clonedInput = cloneJsonValue(input);
+  const normalizedInput = normalizeRecordValues(clonedInput, "", changes, warnings);
+
+  if (changes.length > 0) {
+    warnings.unshift({
+      path: "normalization",
+      message: "Se normalizaron algunos campos antes de guardar.",
+      suggestion: "Revisa la sección de normalizaciones aplicadas antes de importar.",
+      code: "type",
+    });
+  }
+
+  return {
+    normalizedInput,
+    warnings,
+    changes,
+  };
 }
 
 function validateStringArray(value: unknown, path: string, errors: ValidationIssue[]) {
@@ -813,6 +1148,13 @@ export function repairJsonText(input: string): JsonRepairResult {
 
   repairedText = applyRepairStep(
     repairedText,
+    transformOutsideQuotedText(repairedText, (chunk) => chunk.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\r\n]*/g, "")),
+    fixes,
+    "Se eliminaron comentarios incompatibles con JSON.",
+  );
+
+  repairedText = applyRepairStep(
+    repairedText,
     repairedText
       .replace(/'([^']+)'\s*:/g, "\"$1\":")
       .replace(/:\s*'([^']*)'/g, ": \"$1\"")
@@ -1004,6 +1346,17 @@ function toImportIssue(
     receivedValue,
     allowedValues,
     suggestion,
+  };
+}
+
+function normalizationChangeToImportIssue(change: NormalizationChange): ImportIssue {
+  return {
+    severity: "warning",
+    path: change.path,
+    message: change.message,
+    receivedValue: change.before,
+    normalizedValue: change.after,
+    suggestion: `${formatNormalizationValue(change.before)} -> ${formatNormalizationValue(change.after)}`,
   };
 }
 
@@ -1266,6 +1619,7 @@ export function generateImportWarnings(input: HybridOSAppInput): ImportIssue[] {
 export function validateHybridOSImport(inputText: string): ImportValidationResult {
   let parsedJson: unknown;
   let repairedText: string | undefined;
+  let normalizedText: string | undefined;
   let autoRepaired = false;
   let repairFixes: string[] = [];
   let rawParseError: string | undefined;
@@ -1287,12 +1641,14 @@ export function validateHybridOSImport(inputText: string): ImportValidationResul
         errors: [{
           severity: "error",
           path: "json",
-          message: "JSON inválido. No se pudo reparar automáticamente.",
+          message: "El JSON no se puede interpretar. Revisa comillas, llaves y comas.",
           receivedValue: rawParseError,
-          suggestion: "Revisa comas, llaves, comillas dobles y formato general.",
+          suggestion: "Revisa comillas, llaves y comas. El detalle técnico queda disponible para depuración.",
         }],
         warnings: [],
+        normalizationChanges: [],
         repairedText: repairResult.changed ? repairResult.repairedText : undefined,
+        normalizedText: undefined,
         autoRepaired: false,
         repairFixes: repairResult.fixes,
         rawParseError,
@@ -1300,11 +1656,24 @@ export function validateHybridOSImport(inputText: string): ImportValidationResul
     }
   }
 
-  const sourceWasArray = Array.isArray(parsedJson);
-  const inputs: unknown[] = sourceWasArray ? parsedJson as unknown[] : [parsedJson];
+  const normalization = normalizeHybridOSInput(parsedJson);
+  const normalizedJson = normalization.normalizedInput;
+  const normalizationIssues = normalization.changes.map(normalizationChangeToImportIssue);
+  const sourceWasArray = Array.isArray(normalizedJson);
+  const inputs: unknown[] = sourceWasArray ? normalizedJson as unknown[] : [normalizedJson];
   const errors: ImportIssue[] = [];
   const warnings: ImportIssue[] = [];
   const validInputs: HybridOSAppInput[] = [];
+
+  if (normalization.changes.length > 0) {
+    normalizedText = JSON.stringify(normalizedJson, null, 2);
+    warnings.push({
+      severity: "warning",
+      path: "normalization",
+      message: "Se normalizaron algunos campos antes de guardar.",
+      suggestion: "Revisa la sección de normalizaciones aplicadas antes de guardar o simular.",
+    });
+  }
 
   if (autoRepaired) {
     warnings.push({
@@ -1317,7 +1686,7 @@ export function validateHybridOSImport(inputText: string): ImportValidationResul
 
   inputs.forEach((input, inputIndex) => {
     const validation = validateHybridOSAppInput(input);
-    const rootInput = sourceWasArray ? parsedJson : input;
+    const rootInput = sourceWasArray ? normalizedJson : input;
 
     errors.push(...validation.errors.map((issue) => toImportIssue(issue, rootInput, {
       sourceWasArray,
@@ -1350,8 +1719,10 @@ export function validateHybridOSImport(inputText: string): ImportValidationResul
     valid: errors.length === 0,
     errors,
     warnings,
+    normalizationChanges: normalizationIssues,
     parsed: errors.length === 0 ? validInputs : undefined,
     repairedText,
+    normalizedText,
     autoRepaired,
     repairFixes,
     rawParseError,
