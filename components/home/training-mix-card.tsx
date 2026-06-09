@@ -10,7 +10,7 @@ const trendLabels: Record<TrainingMixTrend, string> = {
 };
 
 const trendClasses: Record<TrainingMixTrend, string> = {
-  above: "border-[rgba(56,217,159,0.36)] bg-[rgba(56,217,159,0.1)] text-[var(--accent)]",
+  above: "border-[var(--accent-secondary-border)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary-text)]",
   below: "border-[rgba(240,196,107,0.34)] bg-[var(--warning-soft)] text-[var(--warning)]",
   range: "border-[var(--line)] bg-[rgba(244,247,244,0.04)] text-[var(--muted-strong)]",
 };

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { dashboardPeriods, filterSessionsByPeriod, type DashboardPeriod } from "@/lib/domain/dashboard/periods";
+import { getSessionRunMeters, getTotalRunExposureMeters } from "@/lib/domain/training/run-exposure";
 import { getSecondaryActivityKind, isSecondaryActivity } from "@/lib/domain/training/secondary-activity";
 import { calculateRunningKm, calculateTotalDuration } from "@/lib/selectors/training";
 import { useTrainingSessions, type TrainingSessionWithSync } from "@/lib/storage/use-training-sessions";
@@ -213,7 +214,7 @@ function SessionRow({ session }: { session: TrainingSessionWithSync }) {
   const hiddenTags = Math.max(session.tags.length - visibleTags.length, 0);
 
   return (
-    <article className="grid gap-3 border-t border-[var(--line)] bg-[rgba(244,247,244,0.018)] px-3 py-3 transition hover:bg-[rgba(56,217,159,0.045)] md:grid-cols-[84px_minmax(0,1fr)_auto] md:items-center md:px-4">
+    <article className="grid gap-3 border-t border-[var(--line)] bg-[rgba(244,247,244,0.018)] px-3 py-3 transition hover:bg-[var(--accent-faint)] md:grid-cols-[84px_minmax(0,1fr)_auto] md:items-center md:px-4">
       <div className="flex items-center gap-2 md:block">
         <p className="font-mono text-xs font-black uppercase tracking-[0.12em] text-[var(--accent)]">{formatCompactDate(session.date)}</p>
         {isPending ? <Badge tone="warning">pendingSync</Badge> : null}
@@ -245,10 +246,10 @@ function SessionRow({ session }: { session: TrainingSessionWithSync }) {
       <div className="grid grid-cols-4 items-center gap-2 md:min-w-[360px]">
         <p className="font-mono text-xs font-black text-[var(--foreground)]">{session.durationMinutes ?? "-"}m</p>
         <p className="font-mono text-xs font-black text-[var(--foreground)]">RPE {session.rpe ?? "-"}</p>
-        <p className="font-mono text-xs font-black text-[var(--foreground)]">{formatKm(session.sessionMetrics.totalRunMeters)}</p>
+        <p className="font-mono text-xs font-black text-[var(--foreground)]">{formatKm(getSessionRunMeters(session))}</p>
         <Link
           href={`/training/${session.id}`}
-          className="inline-flex justify-center rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-2.5 py-1.5 text-xs font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] hover:text-[var(--accent-strong)]"
+          className="inline-flex justify-center rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-2.5 py-1.5 text-xs font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] hover:text-[var(--accent-strong)]"
         >
           Ver detalle
         </Link>
@@ -283,7 +284,7 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
   }, [period, query, sessions, sortMode, typeFilter]);
 
   const rpeSummary = getAverageRpeSummary(filteredSessions);
-  const totalRunMeters = filteredSessions.reduce((total, session) => total + session.sessionMetrics.totalRunMeters, 0);
+  const totalRunMeters = getTotalRunExposureMeters(filteredSessions);
   const frequentTypes = getFrequentTypes(filteredSessions);
   const groupedSessions = useMemo(() => groupSessionsByDate(filteredSessions), [filteredSessions]);
   const isRemoteError = source === "seed-fallback" && Boolean(remoteError);
@@ -307,14 +308,14 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link
               href="/training/import"
-              className="inline-flex rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[#06100c] transition hover:bg-[var(--accent-strong)]"
+              className="inline-flex rounded-md border border-[var(--accent-border)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)]"
             >
               Importar JSON
             </Link>
             <button
               type="button"
               onClick={exportBackup}
-              className="inline-flex rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
+              className="inline-flex rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)]"
             >
               Exportar backup
             </button>
@@ -348,7 +349,7 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
           <p className="mt-1 font-mono text-2xl font-black text-[var(--foreground)]">{calculateTotalDuration(filteredSessions)}m</p>
         </div>
         <div>
-          <p className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Running</p>
+          <p className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Carrera total</p>
           <p className="mt-1 font-mono text-2xl font-black text-[var(--foreground)]">{calculateRunningKm(filteredSessions)} km</p>
           <p className="mt-1 text-xs text-[var(--muted)]">{totalRunMeters} m</p>
         </div>
@@ -371,7 +372,7 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Título, tag o tipo"
-              className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition focus:border-[rgba(56,217,159,0.42)]"
+              className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--accent-border-strong)]"
             />
           </label>
           <div>
@@ -384,8 +385,8 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
                   onClick={() => setTypeFilter(filter.value)}
                   className={`rounded-md border px-2.5 py-1.5 text-xs font-bold transition ${
                     typeFilter === filter.value
-                      ? "border-[rgba(56,217,159,0.3)] bg-[var(--accent-soft)] text-[var(--accent-strong)]"
-                      : "border-[var(--line)] bg-[rgba(244,247,244,0.035)] text-[var(--muted-strong)] hover:border-[rgba(56,217,159,0.34)]"
+                      ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-strong)]"
+                      : "border-[var(--line)] bg-[rgba(244,247,244,0.035)] text-[var(--muted-strong)] hover:border-[var(--accent-border)]"
                   }`}
                 >
                   {filter.label}
@@ -403,8 +404,8 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
                   onClick={() => setPeriod(item.value)}
                   className={`rounded-md border px-2.5 py-1.5 text-xs font-bold transition ${
                     period === item.value
-                      ? "border-[rgba(56,217,159,0.3)] bg-[var(--accent-soft)] text-[var(--accent-strong)]"
-                      : "border-[var(--line)] bg-[rgba(244,247,244,0.035)] text-[var(--muted-strong)] hover:border-[rgba(56,217,159,0.34)]"
+                      ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-strong)]"
+                      : "border-[var(--line)] bg-[rgba(244,247,244,0.035)] text-[var(--muted-strong)] hover:border-[var(--accent-border)]"
                   }`}
                 >
                   {item.label}
@@ -417,7 +418,7 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
             <select
               value={sortMode}
               onChange={(event) => setSortMode(event.target.value as SortMode)}
-              className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition focus:border-[rgba(56,217,159,0.42)]"
+              className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--accent-border-strong)]"
             >
               {sortModes.map((item) => (
                 <option key={item.value} value={item.value}>
@@ -430,7 +431,7 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
             type="button"
             onClick={clearFilters}
             disabled={!hasActiveFilters}
-            className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.035)] px-3 py-2 text-xs font-bold text-[var(--muted-strong)] transition hover:border-[rgba(56,217,159,0.34)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.035)] px-3 py-2 text-xs font-bold text-[var(--muted-strong)] transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Limpiar filtros
           </button>

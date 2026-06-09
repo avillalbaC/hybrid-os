@@ -450,9 +450,9 @@ function LoadingSpinner() {
 function feedbackToneClasses(tone: MainFeedbackTone) {
   if (tone === "success") {
     return {
-      container: "border-[rgba(56,217,159,0.38)] bg-[rgba(56,217,159,0.09)]",
-      indicator: "border-[rgba(56,217,159,0.42)] bg-[rgba(56,217,159,0.14)] text-[var(--accent)]",
-      text: "text-[var(--accent)]",
+      container: "border-[var(--accent-secondary-border)] bg-[var(--accent-secondary-soft)]",
+      indicator: "border-[var(--accent-secondary-border)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary-text)]",
+      text: "text-[var(--accent-secondary-text)]",
     };
   }
 
@@ -646,21 +646,21 @@ function MainFeedbackPanel({
         <div className="mt-4 flex flex-wrap gap-2">
           <Link
             href="/training"
-            className="rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent)] px-3 py-2 text-sm font-black text-[#06100c] transition hover:bg-[var(--accent-strong)] focus-visible:bg-[var(--accent-strong)]"
+            className="rounded-md border border-[var(--accent-border)] bg-[var(--accent)] px-3 py-2 text-sm font-black text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)] focus-visible:bg-[var(--accent-hover)]"
           >
             Ver en Training Log
           </Link>
           <button
             type="button"
             onClick={onImportAnother}
-            className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
+            className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)]"
           >
             Importar otra sesión
           </button>
           <button
             type="button"
             onClick={onClear}
-            className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-3 py-2 text-sm font-bold text-[var(--muted-strong)] transition hover:border-[rgba(56,217,159,0.34)]"
+            className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-3 py-2 text-sm font-bold text-[var(--muted-strong)] transition hover:border-[var(--accent-border)]"
           >
             Limpiar
           </button>
@@ -754,7 +754,7 @@ function IssueList({
                         </button>
                         <details>
                           <summary className="cursor-pointer text-xs font-bold text-[var(--accent)]">Ver detalle técnico</summary>
-                          <ul className="mt-2 space-y-1 font-mono text-xs leading-5 text-[#d9f2e9]">
+                          <ul className="mt-2 space-y-1 font-mono text-xs leading-5 text-[var(--code-text)]">
                             {group.issues.map((issue, index) => (
                               <li key={`${issue.path}-${issue.message}-${index}`}>
                                 {issue.path}: {issue.message}
@@ -794,7 +794,7 @@ function SaveErrorDetails({ error }: { error: SaveErrorState | null }) {
               {detail.hint ? <p className="mt-1">{detail.hint}</p> : null}
               <details className="mt-2">
                 <summary className="cursor-pointer text-xs font-bold text-[var(--accent)]">Ver detalle técnico</summary>
-                <pre className="mt-2 overflow-auto rounded-md bg-[var(--panel-soft)] p-3 text-xs text-[#d9f2e9]">{JSON.stringify(detail, null, 2)}</pre>
+                <pre className="mt-2 overflow-auto rounded-md bg-[var(--panel-soft)] p-3 text-xs text-[var(--code-text)]">{JSON.stringify(detail, null, 2)}</pre>
               </details>
             </li>
           ))}
@@ -823,13 +823,13 @@ function TechnicalDetails({ validation, saveError }: { validation: ValidationSta
         {validation.rawParseError ? (
           <div>
             <p className="font-semibold text-[var(--foreground)]">Error original</p>
-            <pre className="mt-2 overflow-auto rounded-md bg-[var(--panel-soft)] p-3 text-xs leading-5 text-[#d9f2e9]">{validation.rawParseError}</pre>
+            <pre className="mt-2 overflow-auto rounded-md bg-[var(--panel-soft)] p-3 text-xs leading-5 text-[var(--code-text)]">{validation.rawParseError}</pre>
           </div>
         ) : null}
         {validation.repairFixes && validation.repairFixes.length > 0 ? (
           <div>
             <p className="font-semibold text-[var(--foreground)]">Reparaciones automáticas</p>
-            <ul className="mt-2 space-y-1 font-mono text-xs leading-5 text-[#d9f2e9]">
+            <ul className="mt-2 space-y-1 font-mono text-xs leading-5 text-[var(--code-text)]">
               {validation.repairFixes.map((fix) => (
                 <li key={fix}>{fix}</li>
               ))}
@@ -839,7 +839,7 @@ function TechnicalDetails({ validation, saveError }: { validation: ValidationSta
         {validation.errors.length > 0 || validation.normalizationChanges.length > 0 || validation.warnings.length > 0 ? (
           <div>
             <p className="font-semibold text-[var(--foreground)]">Paths internos</p>
-            <ul className="mt-2 space-y-1 font-mono text-xs leading-5 text-[#d9f2e9]">
+            <ul className="mt-2 space-y-1 font-mono text-xs leading-5 text-[var(--code-text)]">
               {[...validation.errors, ...validation.normalizationChanges, ...validation.warnings].map((issue, index) => (
                 <li key={`${issue.path}-${index}`}>{issue.path}: {issue.message}</li>
               ))}
@@ -849,7 +849,7 @@ function TechnicalDetails({ validation, saveError }: { validation: ValidationSta
         {saveError ? (
           <div>
             <p className="font-semibold text-[var(--foreground)]">Supabase / guardado</p>
-            <pre className="mt-2 overflow-auto rounded-md bg-[var(--panel-soft)] p-3 text-xs leading-5 text-[#d9f2e9]">
+            <pre className="mt-2 overflow-auto rounded-md bg-[var(--panel-soft)] p-3 text-xs leading-5 text-[var(--code-text)]">
               {JSON.stringify(saveError.details.length > 0 ? saveError.details : { message: saveError.message }, null, 2)}
             </pre>
           </div>
@@ -958,14 +958,14 @@ function PreviewCard({
                   value={shoeDraft}
                   onChange={(event) => setShoeDraft(event.target.value)}
                   placeholder="Puma Deviate Nitro 3"
-                  className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm text-[var(--foreground)] transition focus:border-[rgba(56,217,159,0.42)]"
+                  className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm text-[var(--foreground)] transition focus:border-[var(--accent-border-strong)]"
                 />
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="submit"
                   disabled={shoeDraft.trim().length === 0}
-                  className="rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent)] px-3 py-2 text-sm font-black text-[#06100c] transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md border border-[var(--accent-border)] bg-[var(--accent)] px-3 py-2 text-sm font-black text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Guardar
                 </button>
@@ -975,7 +975,7 @@ function PreviewCard({
                     setShoeDraft("");
                     setIsAddingShoes(false);
                   }}
-                  className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
+                  className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)]"
                 >
                   Cancelar
                 </button>
@@ -1404,7 +1404,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
             <button
               type="button"
               onClick={copyParserPrompt}
-              className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] focus-visible:border-[rgba(56,217,159,0.34)]"
+              className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)]"
             >
               Copy prompt
             </button>
@@ -1431,7 +1431,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
           id="app-input"
           value={rawJson}
           onChange={(event) => resetValidationAfterEdit(event.target.value)}
-          className="mt-3 min-h-[520px] w-full resize-y rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-4 font-mono text-sm leading-6 text-[#d6efe4] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition focus:border-[rgba(56,217,159,0.42)]"
+          className="mt-3 min-h-[520px] w-full resize-y rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-4 font-mono text-sm leading-6 text-[var(--accent-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition focus:border-[var(--accent-border-strong)]"
           spellCheck={false}
         />
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1440,14 +1440,14 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
             <button
               type="button"
               onClick={() => validateJson()}
-              className="rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[#06100c] transition hover:bg-[var(--accent-strong)] focus-visible:bg-[var(--accent-strong)]"
+              className="rounded-md border border-[var(--accent-border)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)] focus-visible:bg-[var(--accent-hover)]"
             >
               Validar JSON
             </button>
             <button
               type="button"
               onClick={formatJsonInput}
-              className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
+              className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)]"
             >
               Formatear JSON
             </button>
@@ -1456,7 +1456,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
               onClick={() => {
                 clearImportForm();
               }}
-              className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
+              className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)]"
             >
               Limpiar
             </button>
@@ -1464,7 +1464,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
               type="button"
               onClick={dryRunValidSessions}
               disabled={!canDryRun}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] focus-visible:border-[rgba(56,217,159,0.34)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isDryRunning ? <LoadingSpinner /> : null}
               {dryRunButtonCopy}
@@ -1473,7 +1473,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
               type="button"
               onClick={saveValidSessions}
               disabled={!canSave}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] focus-visible:border-[rgba(56,217,159,0.34)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? <LoadingSpinner /> : null}
               {saveButtonCopy}
@@ -1540,7 +1540,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
             <button
               type="button"
               onClick={copyRepairedJson}
-              className="ml-2 mt-3 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] focus-visible:border-[rgba(56,217,159,0.34)]"
+              className="ml-2 mt-3 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)]"
             >
               {validation.normalizedText ? "Copiar JSON normalizado" : "Copiar JSON reparado"}
             </button>
@@ -1604,7 +1604,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
             ))}
             <details>
               <summary className="cursor-pointer text-sm font-bold text-[var(--accent)]">Ver JSON completo</summary>
-              <pre className="mt-3 max-h-[360px] overflow-auto rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-4 text-xs leading-5 text-[#d9f2e9]">
+              <pre className="mt-3 max-h-[360px] overflow-auto rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-4 text-xs leading-5 text-[var(--code-text)]">
                 {JSON.stringify(validation.preview, null, 2)}
               </pre>
             </details>

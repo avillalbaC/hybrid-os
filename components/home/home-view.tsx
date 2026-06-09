@@ -3,12 +3,15 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { TrainingMixCard } from "@/components/home/training-mix-card";
+import { QuickTrendsCard } from "@/components/dashboard/trends-section";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
+import { getWeeklyTrendMetrics } from "@/lib/analytics/trends";
 import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
 import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
+import { getSessionRunMeters, getTotalRunExposureMeters, type RunningBreakdown } from "@/lib/domain/training/run-exposure";
 import { secondaryActivityKindLabels, summarizeSecondaryActivities, type SecondaryActivitySummary } from "@/lib/domain/training/secondary-activity";
 import { calculateTrainingMix, type TrainingModality } from "@/lib/domain/training/training-mix";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
@@ -36,7 +39,7 @@ const miniMixOrder: TrainingModality[] = ["hyrox", "crossfit", "running", "halte
 const quickLinks = [
   { href: "/training/import", label: "Importar entrenamiento", detail: "Añadir nueva sesión" },
   { href: "/training", label: "Ver log", detail: "Historial y filtros" },
-  { href: "/training/running", label: "Running", detail: "Sesiones con carrera" },
+  { href: "/training/running", label: "Carrera", detail: "Running estructurado y mixto" },
   { href: "/muscle-load", label: "Carga muscular", detail: "Top músculos y patrones" },
   { href: "/dashboard", label: "Dashboard", detail: "Análisis completo por periodo" },
 ];
@@ -68,7 +71,7 @@ function PrimaryAction({
   return (
     <Link
       href={href}
-      className="inline-flex min-h-11 items-center justify-center rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[#06100c] transition hover:bg-[var(--accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+      className="inline-flex min-h-11 items-center justify-center rounded-md border border-[var(--accent-border)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
     >
       {children}
     </Link>
@@ -85,7 +88,7 @@ function SecondaryAction({
   return (
     <Link
       href={href}
-      className="inline-flex min-h-11 items-center justify-center rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.035)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] hover:bg-[rgba(244,247,244,0.055)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+      className="inline-flex min-h-11 items-center justify-center rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.035)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] hover:bg-[rgba(244,247,244,0.055)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
     >
       {children}
     </Link>
@@ -104,6 +107,14 @@ function getWeeklyFatigue(sessions: TrainingSession[]) {
   return sessions.reduce((total, session) => total + session.sessionMetrics.fatigueCost, 0);
 }
 
+function formatKmFromMeters(meters: number) {
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function formatRunningBreakdown(breakdown: RunningBreakdown) {
+  return `${formatKmFromMeters(breakdown.structuredMeters)} running estructurado · ${formatKmFromMeters(breakdown.mixedMeters)} mixto`;
+}
+
 function getWeeklyReading({
   sessionCount,
   runningLabel,
@@ -116,18 +127,18 @@ function getWeeklyReading({
   alertCount: number;
 }) {
   if (alertCount > 0) {
-    return `Semana activa con ${sessionCount} sesiones, ${runningLabel} de running y señales que conviene revisar antes de sumar intensidad.`;
+    return `Semana activa con ${sessionCount} sesiones, ${runningLabel} de carrera total y señales que conviene revisar antes de sumar intensidad.`;
   }
 
   if (averageRpe !== null && averageRpe >= 8) {
-    return `La semana avanza con intensidad alta: ${sessionCount} sesiones, ${runningLabel} de running y RPE medio ${averageRpe}/10.`;
+    return `La semana avanza con intensidad alta: ${sessionCount} sesiones, ${runningLabel} de carrera total y RPE medio ${averageRpe}/10.`;
   }
 
   if (Number(sessionCount) === 0) {
     return "Sin sesiones registradas esta semana. Buen momento para importar el último entrenamiento o planificar la siguiente entrada.";
   }
 
-  return `Semana estable: ${sessionCount} sesiones, ${runningLabel} de running y carga sin alertas principales.`;
+  return `Semana estable: ${sessionCount} sesiones, ${runningLabel} de carrera total y carga sin alertas principales.`;
 }
 
 function getWatchSignals({
@@ -141,7 +152,7 @@ function getWatchSignals({
 }) {
   const hardSessions = getHardSessions(weekSessions);
   const fatigue = getWeeklyFatigue(weekSessions);
-  const runningKm = weekSessions.reduce((total, session) => total + session.sessionMetrics.totalRunMeters, 0) / 1000;
+  const runExposureKm = getTotalRunExposureMeters(weekSessions) / 1000;
   const signals: WatchSignal[] = dashboardAlerts.slice(0, 4);
 
   if (hardSessions.length >= 3 && !signals.some((signal) => signal.title === "Sesiones duras")) {
@@ -160,10 +171,10 @@ function getWatchSignals({
     });
   }
 
-  if (runningKm > 0 && topCalvesLoad >= 180 && !signals.some((signal) => signal.title.includes("gemelos"))) {
+  if (runExposureKm > 0 && topCalvesLoad >= 180 && !signals.some((signal) => signal.title.includes("gemelos"))) {
     signals.push({
-      title: "Running + gemelos",
-      detail: `${runningKm.toFixed(1)} km esta semana con gemelos en carga alta.`,
+      title: "Carrera total + gemelos",
+      detail: `${runExposureKm.toFixed(1)} km de volumen de impacto esta semana con gemelos en carga alta.`,
       tone: topCalvesLoad >= 260 ? "critical" : "warning",
     });
   }
@@ -183,7 +194,7 @@ function getNextAction({
   topCalvesLoad: number;
 }): NextAction {
   const hardSessions = getHardSessions(weekSessions);
-  const runningKm = weekSessions.reduce((total, session) => total + session.sessionMetrics.totalRunMeters, 0) / 1000;
+  const runExposureKm = getTotalRunExposureMeters(weekSessions) / 1000;
   const hasCriticalSignal = signals.some((signal) => signal.tone === "critical");
 
   if (hasCriticalSignal || hardSessions.length >= 3) {
@@ -196,12 +207,12 @@ function getNextAction({
     };
   }
 
-  if (runningKm > 0 && topCalvesLoad >= 180) {
+  if (runExposureKm > 0 && topCalvesLoad >= 180) {
     return {
       title: "Evitar impacto",
       detail: "Mantén el motor con bajo impacto y revisa gemelos antes de volver a correr fuerte.",
       href: "/training/running",
-      label: "Ver running",
+      label: "Ver carrera",
       tone: "warning",
     };
   }
@@ -236,14 +247,15 @@ function getNextAction({
 }
 
 function LatestSessionCard({ session }: { session: TrainingSession }) {
-  const runningKm = session.sessionMetrics.totalRunMeters > 0
-    ? `${(session.sessionMetrics.totalRunMeters / 1000).toFixed(1)} km`
+  const sessionRunMeters = getSessionRunMeters(session);
+  const runningKm = sessionRunMeters > 0
+    ? formatKmFromMeters(sessionRunMeters)
     : "Sin dato";
 
   return (
     <Link
       href={`/training/${session.id}`}
-      className="mt-4 block rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-4 outline-none transition hover:-translate-y-0.5 hover:border-[rgba(56,217,159,0.34)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+      className="mt-4 block rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-4 outline-none transition hover:-translate-y-0.5 hover:border-[var(--accent-border)] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
     >
       <div className="flex flex-wrap items-center gap-2">
         <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-[var(--accent)]">{formatDate(session.date)}</p>
@@ -261,7 +273,7 @@ function LatestSessionCard({ session }: { session: TrainingSession }) {
           <p className="mt-1 font-mono font-black">{session.rpe ? `${session.rpe}/10` : "Sin dato"}</p>
         </div>
         <div className="rounded-md border border-[var(--line)] p-2">
-          <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Running</p>
+          <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Carrera</p>
           <p className="mt-1 font-mono font-black">{runningKm}</p>
         </div>
       </div>
@@ -357,7 +369,7 @@ function NextActionCard({
             className={`mt-5 inline-flex min-h-11 items-center justify-center rounded-md border px-4 py-2 text-sm font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${
               action.tone === "warning"
                 ? "border-[rgba(240,196,107,0.34)] bg-[var(--warning-soft)] text-[var(--warning)] hover:border-[rgba(240,196,107,0.5)]"
-                : "border-[rgba(56,217,159,0.34)] bg-[var(--accent)] text-[#06100c] hover:bg-[var(--accent-strong)]"
+                : "border-[var(--accent-border)] bg-[var(--accent)] text-[var(--accent-foreground)] hover:bg-[var(--accent-hover)]"
             }`}
           >
             {action.label}
@@ -498,7 +510,7 @@ function QuickLinksCard() {
           <Link
             key={item.href}
             href={item.href}
-            className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 transition hover:border-[rgba(56,217,159,0.34)] hover:bg-[rgba(244,247,244,0.04)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+            className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 transition hover:border-[var(--accent-border)] hover:bg-[rgba(244,247,244,0.04)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
           >
             <span className="block text-sm font-bold text-[var(--foreground)]">{item.label}</span>
             <span className="mt-1 block text-xs text-[var(--muted)]">{item.detail}</span>
@@ -520,6 +532,7 @@ export function HomeView({
 }) {
   const { sessions: combinedSessions, pendingSessions, source, syncMessage, isLoading, isReady } = useTrainingSessions(sessions);
   const metrics = calculateDashboardMetrics(combinedSessions, bodyChecks, nutritionChecks, "week");
+  const trends = useMemo(() => getWeeklyTrendMetrics(combinedSessions), [combinedSessions]);
   const { currentWeekSessions } = useMemo(() => getLatestWeekSessions(combinedSessions), [combinedSessions]);
   const secondaryActivitySummary = useMemo(() => summarizeSecondaryActivities(currentWeekSessions), [currentWeekSessions]);
   const trainingMix = useMemo(() => calculateTrainingMix(combinedSessions), [combinedSessions]);
@@ -549,9 +562,9 @@ export function HomeView({
   });
   const isMetricsLoading = isLoading || !isReady;
   const hasWeekSessions = (metrics.sessions.value ?? 0) > 0;
-  const sessionsState = isMetricsLoading ? "loading" : hasWeekSessions ? "ready" : "empty";
-  const runningState = isMetricsLoading ? "loading" : (metrics.runningKm.value ?? 0) > 0 ? "ready" : "empty";
-  const durationState = isMetricsLoading ? "loading" : (metrics.durationMinutes.value ?? 0) > 0 ? "ready" : "empty";
+  const sessionsState = isMetricsLoading ? "loading" : "ready";
+  const runningState = isMetricsLoading ? "loading" : "ready";
+  const durationState = isMetricsLoading ? "loading" : "ready";
   const rpeState = isMetricsLoading ? "loading" : metrics.averageRpe.value !== null ? "ready" : "empty";
   const weeklyReadingText = isMetricsLoading
     ? "Calculando métricas semanales con la fuente final de entrenamiento."
@@ -560,7 +573,7 @@ export function HomeView({
   return (
     <>
       <section className="mb-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-stretch">
-        <div className="rounded-md border border-[var(--line)] bg-[linear-gradient(135deg,rgba(56,217,159,0.14),rgba(18,23,21,0.98)_44%,rgba(11,14,13,0.98))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] sm:p-7">
+        <div className="rounded-md border border-[var(--line)] bg-[linear-gradient(135deg,var(--accent-hero),rgba(18,23,21,0.98)_44%,rgba(11,14,13,0.98))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] sm:p-7">
           <p className="text-[0.7rem] font-bold uppercase tracking-[0.28em] text-[var(--accent)]">Centro de mando diario</p>
           <div className="mt-3 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
@@ -575,7 +588,7 @@ export function HomeView({
                 <HeroMetricValue isLoading={isMetricsLoading} isEmpty={!hasWeekSessions} value={metrics.sessions.formattedValue} />
               </div>
               <div className="rounded-md border border-[rgba(244,247,244,0.12)] bg-[rgba(244,247,244,0.035)] p-3">
-                <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Running</p>
+                <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Carrera total</p>
                 <HeroMetricValue isLoading={isMetricsLoading} isEmpty={(metrics.runningKm.value ?? 0) <= 0} value={metrics.runningKm.formattedValue} />
               </div>
               <div className="rounded-md border border-[rgba(244,247,244,0.12)] bg-[rgba(244,247,244,0.035)] p-3">
@@ -619,13 +632,39 @@ export function HomeView({
       <div className="flex flex-col gap-6">
         <section className="order-2 grid gap-4 sm:grid-cols-2 xl:grid-cols-4 lg:order-1">
           <MetricLink href="/training/weekly">
-            <MetricCard label="Sesiones semana" value={metrics.sessions.formattedValue} detail="Estado semanal" delta={metrics.sessions.deltaLabel} deltaTone={metrics.sessions.deltaTone} tone="strong" state={sessionsState} />
+            <MetricCard
+              label="Sesiones semana"
+              value={metrics.sessions.formattedValue}
+              detail="Estado semanal"
+              delta={metrics.sessions.deltaLabel}
+              deltaTone={metrics.sessions.deltaTone}
+              comparison={metrics.sessions.comparisonDisplay}
+              tone="strong"
+              state={sessionsState}
+            />
           </MetricLink>
           <MetricLink href="/training/running">
-            <MetricCard label="Running" value={metrics.runningKm.formattedValue} detail="Solo type running" delta={metrics.runningKm.deltaLabel} deltaTone={metrics.runningKm.deltaTone} tone="strong" state={runningState} />
+            <MetricCard
+              label="Carrera total"
+              value={metrics.runningKm.formattedValue}
+              detail={formatRunningBreakdown(metrics.runningBreakdown)}
+              delta={metrics.runningKm.deltaLabel}
+              deltaTone={metrics.runningKm.deltaTone}
+              comparison={metrics.runningKm.comparisonDisplay}
+              tone="strong"
+              state={runningState}
+            />
           </MetricLink>
           <MetricLink href="/dashboard">
-            <MetricCard label="Duración" value={metrics.durationMinutes.formattedValue} detail="Carga de la semana" delta={metrics.durationMinutes.deltaLabel} deltaTone={metrics.durationMinutes.deltaTone} state={durationState} />
+            <MetricCard
+              label="Duración"
+              value={metrics.durationMinutes.formattedValue}
+              detail="Carga de la semana"
+              delta={metrics.durationMinutes.deltaLabel}
+              deltaTone={metrics.durationMinutes.deltaTone}
+              comparison={metrics.durationMinutes.comparisonDisplay}
+              state={durationState}
+            />
           </MetricLink>
           <MetricLink href="/dashboard">
             <MetricCard label="RPE medio" value={metrics.averageRpe.formattedValue} detail="Intensidad percibida" delta={metrics.averageRpe.deltaLabel} deltaTone={metrics.averageRpe.deltaTone} state={rpeState} />
@@ -639,6 +678,7 @@ export function HomeView({
 
         <section className="order-3 grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.8fr)_320px]">
           <TrainingMixCard rows={miniMixRows} density="compact" actionHref="/dashboard" actionLabel="Ver dashboard" state={isMetricsLoading ? "loading" : miniMixRows.length > 0 ? "ready" : "empty"} />
+          <QuickTrendsCard trends={trends} isLoading={isMetricsLoading} />
           <MuscleSummaryCard muscles={visibleMuscles} isLoading={isMetricsLoading} />
           <SecondaryActivityCard summary={secondaryActivitySummary} isLoading={isMetricsLoading} />
           <QuickLinksCard />

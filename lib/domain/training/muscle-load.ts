@@ -234,7 +234,7 @@ export function detectMuscleImbalances(
       level: (context.runningDistanceMeters ?? 0) >= 5000 ? "vigilar" : "info",
       title: "Gemelos con carga alta",
       detail: (context.runningDistanceMeters ?? 0) >= 5000
-        ? "Gemelos en top 5 con volumen alto de running en el periodo."
+        ? "Gemelos en top 5 con volumen alto de carrera en el periodo."
         : "Gemelos aparecen entre los músculos más cargados del periodo.",
     });
   }

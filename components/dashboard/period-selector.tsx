@@ -24,7 +24,7 @@ export function PeriodSelector({
             onClick={() => onChange(period.value)}
             className={`rounded-[4px] px-3 py-2 text-xs font-black uppercase tracking-[0.14em] transition sm:px-4 ${
               isActive
-                ? "bg-[var(--accent)] text-[#06100c] shadow-[0_10px_28px_rgba(56,217,159,0.2)]"
+                ? "bg-[var(--accent)] text-[var(--accent-foreground)] shadow-[0_10px_28px_var(--accent-shadow)]"
                 : "text-[var(--muted-strong)] hover:bg-[rgba(244,247,244,0.06)] hover:text-[var(--foreground)]"
             }`}
             aria-pressed={isActive}

@@ -1,4 +1,5 @@
 import { getPeriodRange, getPreviousPeriodRange, isDateInRange } from "@/lib/domain/dashboard/periods";
+import { getSessionRunMeters } from "@/lib/domain/training/run-exposure";
 import { isPureRunningSession } from "@/lib/domain/training/session-kind";
 import { getWeekKey } from "@/lib/selectors/training";
 import type { TrainingSession } from "@/types/training";
@@ -33,31 +34,7 @@ export type RunningShoeVolume = {
   sessions: number;
 };
 
-const runningExerciseNames = ["run", "running", "shuttle run", "carrera"];
-
-function hasRunningName(value: string) {
-  const normalized = value.toLowerCase();
-  return runningExerciseNames.some((name) => normalized.includes(name));
-}
-
-export function getSessionRunMeters(session: TrainingSession) {
-  const metricMeters = session.sessionMetrics.totalRunMeters;
-
-  if (metricMeters > 0) {
-    return metricMeters;
-  }
-
-  return session.blocks.reduce(
-    (sessionTotal, block) =>
-      sessionTotal +
-      block.exercises.reduce((blockTotal, exercise) => {
-        const isRunningExercise =
-          exercise.movementPattern === "run" || hasRunningName(exercise.name) || hasRunningName(exercise.canonicalName);
-        return isRunningExercise ? blockTotal + (exercise.distanceMeters ?? 0) : blockTotal;
-      }, 0),
-    0,
-  );
-}
+export { getSessionRunMeters } from "@/lib/domain/training/run-exposure";
 
 export function getRunningContext(session: TrainingSession): RunningContext {
   if (isPureRunningSession(session)) {

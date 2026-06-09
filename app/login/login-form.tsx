@@ -70,7 +70,7 @@ export function LoginForm({ error }: { error?: string }) {
           type="button"
           onClick={handleGoogleSignIn}
           disabled={isLoading}
-          className="flex w-full items-center justify-center gap-3 rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent-soft)] px-4 py-2.5 text-sm font-bold text-[var(--foreground)] transition hover:bg-[rgba(56,217,159,0.18)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-3 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-4 py-2.5 text-sm font-bold text-[var(--foreground)] transition hover:bg-[var(--accent-hover-soft)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span className="grid size-7 place-items-center rounded-md border border-[var(--line-strong)] bg-[var(--panel-soft)] font-black text-[0.72rem]">
             G

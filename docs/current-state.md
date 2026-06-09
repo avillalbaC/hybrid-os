@@ -1,6 +1,6 @@
 # Hybrid OS - Current State
 
-Snapshot: 2026-06-02
+Snapshot: 2026-06-03
 
 Este documento describe el estado real del proyecto en este snapshot. No debe usarse para guardar metricas que cambian cada dia, salvo que se marquen explicitamente como snapshot.
 
@@ -8,11 +8,17 @@ Este documento describe el estado real del proyecto en este snapshot. No debe us
 
 Hybrid OS es una app privada de Next.js, TypeScript, Tailwind y Supabase para importar, consultar y analizar historial de entrenamiento hibrido.
 
+La app ya esta desplegada y funcionando en produccion privada en:
+
+https://hybrid.alvarovillalba.es
+
+El portfolio publico sigue en https://alvarovillalba.es. Hybrid OS vive en un subdominio separado y no sustituye ni se mezcla con el portfolio.
+
 El flujo principal sigue siendo:
 
 `HybridOSAppInput JSON -> validacion -> preview -> Supabase -> Dashboard / Training Log / Muscle Load`
 
-Google Auth privado ya funciona. La app usa autenticacion real con Supabase Auth y acceso limitado al usuario autorizado. No se ha abierto multiusuario real.
+Google Auth privado ya funciona. La app usa autenticacion real con Supabase Auth, allow-list activa y acceso limitado al usuario autorizado. No se ha abierto multiusuario real.
 
 Supabase es la fuente principal para datos reales. El seed historico queda solo como fallback/desarrollo y `localStorage` queda solo como cola temporal para sesiones pendientes de sincronizacion.
 
@@ -21,7 +27,10 @@ Supabase es la fuente principal para datos reales. El seed historico queda solo 
 Estado actual:
 
 - Google Auth privado funciona.
+- Allow-list activa.
 - El acceso sigue siendo privado, no multiusuario abierto.
+- La URL de produccion privada es https://hybrid.alvarovillalba.es.
+- El portfolio publico sigue separado en https://alvarovillalba.es.
 - Las rutas privadas de la app requieren sesion valida.
 - Las APIs privadas estan protegidas y requieren usuario autenticado.
 - `user_id` ya esta anadido a las tablas principales de datos.
@@ -135,8 +144,10 @@ Reglas que deben preservarse:
 ## Que esta hecho
 
 - App base con Next.js, TypeScript y Tailwind.
+- Despliegue privado de produccion funcionando en https://hybrid.alvarovillalba.es.
 - Navegacion principal y rutas prioritarias de entrenamiento.
 - Google Auth privado con Supabase.
+- Allow-list activa.
 - Acceso privado protegido.
 - `user_id` anadido a las tablas principales.
 - Backfill de datos existentes al owner.
@@ -154,14 +165,15 @@ Reglas que deben preservarse:
 
 ## Pendiente
 
-- Mejorar feedback limpio del importador: errores, warnings, duplicados y estados de guardado.
+- Mejorar feedback limpio del importador: errores, warnings, duplicados, estados de guardado y dry-run.
 - Anadir loading states globales y consistentes en pantallas prioritarias.
-- Implementar `HybridOSAppInput` v1.1 minimo.
-- Incorporar `shoes` para sesiones de running en v1.1.
+- Implementar `HybridOSAppInput` v1.1 enfocado primero en zapatillas running.
 - Preparar volumen por zapatilla.
+- Hacer auditoria responsive/mobile de pantallas prioritarias.
 - Conectar `/body` y `/nutrition` a Supabase como siguiente bloque no prioritario de training.
 - Conectar `/goals` a datos reales.
 - Decidir e integrar un asset GLB real para BodyHeatmap 3D en una fase futura.
+- Anadir PWA basica mas adelante, despues de estabilizar la experiencia privada y mobile.
 - Anadir pruebas automaticas para el flujo critico de importacion, fuente de datos, auth/RLS y fallback.
 
 ## Decision BodyHeatmap

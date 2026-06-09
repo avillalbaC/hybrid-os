@@ -5,6 +5,7 @@ import {
   isDateInRange,
   resolvePeriodReferenceDate,
 } from "@/lib/domain/dashboard/periods";
+import { getSessionRunMeters } from "@/lib/domain/training/run-exposure";
 import { isPureRunningSession } from "@/lib/domain/training/session-kind";
 import { getRecentSessions, getWeekKey } from "@/lib/selectors/training";
 import type { MuscleName, TrainingExercise, TrainingSession } from "@/types/training";
@@ -45,12 +46,12 @@ export function getLatestWeekSessions(sessions: TrainingSession[]) {
 
 export function getRunningSessions(sessions: TrainingSession[]): RunningSessionSummary[] {
   return getRecentSessions(sessions, sessions.length)
-    .filter(isPureRunningSession)
     .map((session) => ({
       session,
-      runMeters: session.sessionMetrics.totalRunMeters,
-      sourceType: "running",
-    }));
+      runMeters: getSessionRunMeters(session),
+      sourceType: isPureRunningSession(session) ? "running" as const : session.type === "hyrox" ? "hyrox" as const : "mixed" as const,
+    }))
+    .filter((summary) => summary.runMeters > 0);
 }
 
 export function groupRunningSessionsByWeek(sessions: TrainingSession[]) {

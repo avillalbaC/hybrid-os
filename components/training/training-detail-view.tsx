@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { getSessionRunMeters } from "@/lib/domain/training/run-exposure";
 import { useTrainingSessions, type TrainingSessionWithSync } from "@/lib/storage/use-training-sessions";
 import { formatDataQuality, formatLongDate, formatMuscleName, formatMuscleRole, formatTag, formatTrainingType } from "@/lib/utils/format";
 import type { MuscleName, TrainingBlock, TrainingExercise, TrainingResult, TrainingSession } from "@/types/training";
@@ -96,7 +97,7 @@ function SummaryStat({
 }) {
   const toneClasses = {
     neutral: "border-[var(--line)] bg-[rgba(244,247,244,0.035)]",
-    accent: "border-[rgba(56,217,159,0.32)] bg-[var(--accent-soft)]",
+    accent: "border-[var(--accent-border)] bg-[var(--accent-soft)]",
     warning: "border-[rgba(240,196,107,0.34)] bg-[var(--warning-soft)]",
   };
 
@@ -160,7 +161,7 @@ function ExecutiveSummary({
   ].filter(Boolean);
 
   return (
-    <section className="mb-5 rounded-md border border-[rgba(56,217,159,0.22)] bg-[linear-gradient(135deg,rgba(56,217,159,0.12),rgba(244,247,244,0.035)_42%,rgba(240,196,107,0.08))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.34)]">
+    <section className="mb-5 rounded-md border border-[var(--accent-border)] bg-[linear-gradient(135deg,var(--accent-soft),rgba(244,247,244,0.035)_42%,rgba(240,196,107,0.08))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.34)]">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-4xl">
           <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[var(--accent-strong)]">Lectura rápida</p>
@@ -194,10 +195,10 @@ function ResultCard({
   session: TrainingSession;
 }) {
   const result = session.result;
-  const runMeters = formatMeters(session.sessionMetrics.totalRunMeters);
+  const runMeters = formatMeters(getSessionRunMeters(session));
 
   return (
-    <Card className="border-[rgba(56,217,159,0.24)]">
+    <Card className="border-[var(--accent-border)]">
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[var(--accent)]">Resultado principal</p>
@@ -209,7 +210,7 @@ function ResultCard({
         <div className="grid gap-3 sm:grid-cols-3 md:min-w-[420px]">
           <SummaryStat label="Estado" value={statusLabels[session.status]} tone={session.status === "completed" ? "accent" : "warning"} />
           <SummaryStat label="Cap" value={result?.capMinutes ? `${result.capMinutes} min` : "-"} />
-          <SummaryStat label="Running" value={runMeters ?? "-"} />
+          <SummaryStat label="Carrera" value={runMeters ?? "-"} />
         </div>
       </div>
       {result?.completedAsPlanned !== undefined && result.completedAsPlanned !== null ? (
@@ -429,20 +430,20 @@ function Sidebar({
       <Card>
         <h3 className="text-lg font-black">Navegación</h3>
         <nav className="mt-4 grid gap-2 text-sm font-semibold text-[var(--muted-strong)]">
-          <a href="#resultado" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[rgba(56,217,159,0.34)] hover:text-[var(--foreground)]">Resultado</a>
-          <a href="#datos" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[rgba(56,217,159,0.34)] hover:text-[var(--foreground)]">Datos y calidad</a>
-          <a href="#bloques" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[rgba(56,217,159,0.34)] hover:text-[var(--foreground)]">Bloques</a>
-          <a href="#debug" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[rgba(56,217,159,0.34)] hover:text-[var(--foreground)]">Payload/debug</a>
+          <a href="#resultado" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Resultado</a>
+          <a href="#datos" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Datos y calidad</a>
+          <a href="#bloques" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Bloques</a>
+          <a href="#debug" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Payload/debug</a>
         </nav>
         <div className="mt-4 grid gap-3">
           {nextSession ? (
-            <Link href={`/training/${nextSession.id}`} className="rounded-md border border-[var(--line)] p-3 text-sm font-semibold transition hover:border-[rgba(56,217,159,0.34)]">
+            <Link href={`/training/${nextSession.id}`} className="rounded-md border border-[var(--line)] p-3 text-sm font-semibold transition hover:border-[var(--accent-border)]">
               <span className="block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">Sesión siguiente</span>
               <span className="mt-1 block">{nextSession.title}</span>
             </Link>
           ) : <p className="text-sm text-[var(--muted)]">No hay sesión más reciente.</p>}
           {previousSession ? (
-            <Link href={`/training/${previousSession.id}`} className="rounded-md border border-[var(--line)] p-3 text-sm font-semibold transition hover:border-[rgba(56,217,159,0.34)]">
+            <Link href={`/training/${previousSession.id}`} className="rounded-md border border-[var(--line)] p-3 text-sm font-semibold transition hover:border-[var(--accent-border)]">
               <span className="block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">Sesión anterior</span>
               <span className="mt-1 block">{previousSession.title}</span>
             </Link>
@@ -465,7 +466,7 @@ function Sidebar({
       <Card>
         <details id="debug" className="scroll-mt-24">
           <summary className="cursor-pointer text-sm font-bold text-[var(--accent)]">Payload JSON completo</summary>
-          <pre className="mt-4 max-h-[420px] overflow-auto rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-4 text-xs leading-5 text-[#d9f2e9]">
+          <pre className="mt-4 max-h-[420px] overflow-auto rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-4 text-xs leading-5 text-[var(--code-text)]">
             {JSON.stringify(session, null, 2)}
           </pre>
         </details>
@@ -542,7 +543,7 @@ export function TrainingDetailView({
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link
               href="/training"
-              className="inline-flex rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]"
+              className="inline-flex rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)]"
             >
               Volver al Training Log
             </Link>

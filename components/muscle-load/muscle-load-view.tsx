@@ -11,6 +11,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
 import { calculateExpectedProgress } from "@/lib/domain/dashboard/metrics";
 import { filterSessionsByPeriod, getLatestDate, getPeriodDetail, getPeriodTitle, resolvePeriodReferenceDate, type DashboardPeriod } from "@/lib/domain/dashboard/periods";
+import { getTotalRunExposureMeters } from "@/lib/domain/training/run-exposure";
 import {
   calculateMuscleGroups,
   calculateMuscleSummary,
@@ -323,7 +324,7 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
   const groups = useMemo(() => calculateMuscleGroups(muscleSummary), [muscleSummary]);
   const ratioGroups = useMemo(() => getRatioGroups(groups), [groups]);
   const topSessions = useMemo(() => getTopSessions(analysisSessions), [analysisSessions]);
-  const runningDistanceMeters = analysisSessions.reduce((total, session) => total + session.sessionMetrics.totalRunMeters, 0);
+  const runningDistanceMeters = getTotalRunExposureMeters(analysisSessions);
   const periodReading = useMemo(
     () => getPeriodReading(ranking, groups, runningDistanceMeters),
     [ranking, groups, runningDistanceMeters],
@@ -500,7 +501,7 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
                 <button
                   type="button"
                   onClick={() => setShowFullRanking((current) => !current)}
-                  className="mt-5 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] focus-visible:border-[rgba(56,217,159,0.34)]"
+                  className="mt-5 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)]"
                 >
                   {showFullRanking ? "Mostrar menos" : "Ver ranking completo"}
                 </button>
@@ -583,7 +584,7 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
                 <button
                   type="button"
                   onClick={() => setShowAllSessions((current) => !current)}
-                  className="mt-5 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)] focus-visible:border-[rgba(56,217,159,0.34)]"
+                  className="mt-5 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)]"
                 >
                   {showAllSessions ? "Mostrar menos" : "Ver más sesiones"}
                 </button>

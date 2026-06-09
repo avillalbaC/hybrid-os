@@ -68,7 +68,7 @@ export function DisciplinesOverview({
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge tone="accent">{summaries.length} activas</Badge>
-          <Link href="/training" className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[rgba(56,217,159,0.34)]">
+          <Link href="/training" className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)]">
             Ver log completo
           </Link>
         </div>
@@ -85,7 +85,7 @@ export function DisciplinesOverview({
               onClick={() => setSelectedType(summary.type)}
               className={`rounded-md border p-4 text-left shadow-[0_22px_70px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 ${
                 isSelected
-                  ? "border-[rgba(56,217,159,0.34)] bg-[linear-gradient(180deg,rgba(56,217,159,0.12),var(--panel))]"
+                  ? "border-[var(--accent-border)] bg-[linear-gradient(180deg,var(--accent-soft),var(--panel))]"
                   : "border-[var(--line)] bg-[linear-gradient(180deg,var(--panel-strong),var(--panel))] hover:border-[var(--line-strong)]"
               }`}
             >

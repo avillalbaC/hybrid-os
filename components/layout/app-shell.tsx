@@ -138,7 +138,7 @@ export function AppShell({
             <div className="flex items-center gap-2">
               <Link
                 href="/training/import"
-                className="inline-flex h-9 items-center justify-center rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent)] px-3 text-sm font-black text-[#06100c] transition hover:bg-[var(--accent-strong)]"
+                className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--accent-border)] bg-[var(--accent)] px-3 text-sm font-black text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)]"
               >
                 Importar
               </Link>

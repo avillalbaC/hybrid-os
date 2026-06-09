@@ -4,9 +4,12 @@ Este roadmap refleja la direccion actual del proyecto. Mantiene el foco en datos
 
 ## Principios
 
+- Hybrid OS ya esta desplegado y funcionando en produccion privada.
+- URL de produccion: https://hybrid.alvarovillalba.es.
+- El portfolio publico sigue en https://alvarovillalba.es; Hybrid OS vive en un subdominio separado.
 - Supabase es la fuente principal para datos reales.
-- Google Auth privado, `user_id`, backfill y RLS ya estan activos.
-- La app sigue cerrada a uso privado; no abrir multiusuario real todavia.
+- Google Auth privado, allow-list, `user_id`, backfill y RLS ya estan activos.
+- La app sigue cerrada a uso privado; no es multiusuario abierto.
 - El seed historico es fallback/desarrollo.
 - `localStorage` es cola temporal, no fuente primaria.
 - El flujo importador no debe perder raw data ni payload completo.
@@ -16,20 +19,35 @@ Este roadmap refleja la direccion actual del proyecto. Mantiene el foco en datos
 
 ## Estado ya completado
 
+- Despliegue privado de produccion en https://hybrid.alvarovillalba.es.
+- Separacion de presencia publica: portfolio en https://alvarovillalba.es y app en subdominio propio.
 - Supabase como fuente principal de datos reales.
 - Google Auth privado.
+- Allow-list activa para limitar acceso.
 - `user_id` anadido a las tablas principales.
 - Backfill de datos existentes al owner.
 - RLS activo.
 - APIs privadas protegidas.
 - Importador funcionando con `user_id`.
 
-## v0.6.3 - Importador feedback limpio
+## Siguiente roadmap
+
+Orden actual:
+
+1. Feedback importador + dry-run.
+2. Loading states globales.
+3. v1.1 zapatillas running.
+4. Volumen por zapatilla.
+5. Responsive/mobile audit.
+6. PWA basica mas adelante.
+
+## 1 - Feedback importador + dry-run
 
 Objetivo: hacer que el importador sea mas claro cuando valida, detecta duplicados, guarda o falla.
 
 Alcance:
 
+- Modo dry-run para validar y diagnosticar sin escribir en Supabase.
 - Mensajes de error mas especificos por fase.
 - Warnings no bloqueantes separados de errores reales.
 - Mejor preview de sesiones, body checks y nutrition checks.
@@ -37,7 +55,7 @@ Alcance:
 - Diagnostico seguro para fallos de escritura en Supabase.
 - Mantener guardado de `raw_imports`, `training_sessions`, `training_exercises`, `body_checks` y `nutrition_checks` con `user_id`.
 
-## v0.6.4 - Loading states globales
+## 2 - Loading states globales
 
 Objetivo: mejorar la percepcion de estabilidad y respuesta en las pantallas privadas.
 
@@ -49,20 +67,21 @@ Alcance:
 - Evitar parpadeos entre seed/fallback y datos reales.
 - Respetar accesibilidad basica y `prefers-reduced-motion` si se anaden transiciones.
 
-## v0.7.0 - HybridOSAppInput v1.1 minimo
+## 3 - v1.1 zapatillas running
 
 Objetivo: introducir v1.1 de forma aditiva y sin romper inputs v1.0.
 
 Alcance:
 
 - Aceptar `appInputVersion` `"1.0"` y `"1.1"`.
-- Anadir campos opcionales de contexto: superficie, desnivel, zapatillas, frecuencia cardiaca y sintomas estructurados.
+- Anadir campos opcionales de contexto para running, empezando por zapatillas.
+- Evaluar otros campos opcionales como superficie, desnivel, frecuencia cardiaca y sintomas estructurados sin ampliar alcance si no son necesarios.
 - Usar `shoes` solo para sesiones `type === "running"`.
 - Tratar ausencia de `shoes` como warning no bloqueante en running, nunca como `pendingFields`.
 - Preservar campos nuevos en `payload` y `raw_imports`.
 - No crear columnas nuevas hasta validar uso real.
 
-## v0.7.1 - Volumen por zapatilla
+## 4 - Volumen por zapatilla
 
 Objetivo: empezar a usar el campo de zapatillas para seguimiento practico de running.
 
@@ -73,6 +92,18 @@ Alcance:
 - Mostrar resumen simple y util.
 - Mantener fallback si una sesion running no tiene zapatilla informada.
 - Evaluar si hace falta columna analitica o si basta con `payload`.
+
+## 5 - Responsive/mobile audit
+
+Objetivo: revisar la experiencia real en movil y pantallas pequenas tras estabilizar datos, auth y estados de carga.
+
+Alcance:
+
+- Auditar Home, Dashboard, Training, Training Detail, Weekly, Running, Muscle Load e Import.
+- Corregir desbordes, jerarquias confusas y controles dificiles de usar en movil.
+- Mantener estetica dark premium sin convertir la app en dashboard generico.
+- Revisar accesibilidad basica: foco, tamanos tactiles, etiquetas y contraste.
+- Evitar redisenos grandes salvo que una pantalla lo necesite claramente.
 
 ## v0.8 - Body/Nutrition Supabase
 
@@ -129,9 +160,9 @@ No alcance:
 
 - Reintentar crear una anatomia completa con JSX, CSS, SVG improvisado o primitivas 3D generadas a mano.
 
-### PWA basica y offline sync
+### PWA basica mas adelante
 
-Objetivo: mejorar instalacion y sincronizacion cuando la app privada ya sea estable.
+Objetivo: mejorar instalacion y sincronizacion cuando la app privada ya sea estable y la auditoria responsive/mobile este cerrada.
 
 Alcance:
 
@@ -147,6 +178,7 @@ Alcance:
 - Multiusuario real abierto.
 - Integraciones externas.
 - IA interna de analisis.
+- Fusionar Hybrid OS con el portfolio publico.
 - Cambios destructivos de Supabase.
 - Reescritura completa de arquitectura.
 - Nuevas dependencias de produccion sin justificacion clara.

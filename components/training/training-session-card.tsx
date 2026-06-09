@@ -15,7 +15,7 @@ export function TrainingSessionCard({
   const resolvedSyncStatus = syncStatus ?? (session.pendingSync ? "pending" : session.dataSource === "remote" ? "remote" : session.dataSource === "seed" ? "seed" : undefined);
 
   return (
-    <article className="group rounded-md border border-[var(--line)] bg-[linear-gradient(180deg,var(--panel-strong),var(--panel))] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:border-[rgba(56,217,159,0.28)] hover:shadow-[0_26px_90px_rgba(0,0,0,0.34)]">
+    <article className="group rounded-md border border-[var(--line)] bg-[linear-gradient(180deg,var(--panel-strong),var(--panel))] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:border-[var(--accent-border)] hover:shadow-[0_26px_90px_rgba(0,0,0,0.34)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">

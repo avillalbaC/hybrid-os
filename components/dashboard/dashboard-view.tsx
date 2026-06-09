@@ -10,6 +10,8 @@ import { MuscleLoadList } from "@/components/muscle-load/muscle-load-list";
 import { TrainingSessionCard } from "@/components/training/training-session-card";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { DisciplinesOverview } from "@/components/dashboard/disciplines-overview";
+import { TrendsSection } from "@/components/dashboard/trends-section";
+import { getWeeklyTrendMetrics } from "@/lib/analytics/trends";
 import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
 import { filterSessionsByPeriod } from "@/lib/domain/dashboard/periods";
 import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
@@ -17,12 +19,21 @@ import { secondaryActivityKindLabels, summarizeSecondaryActivities, type Seconda
 import { compareWeeks } from "@/lib/selectors/training";
 import { useDashboardData } from "@/lib/storage/use-dashboard-data";
 import type { DashboardPeriod } from "@/lib/domain/dashboard/periods";
+import type { RunningBreakdown } from "@/lib/domain/training/run-exposure";
 import type { BodyCheck } from "@/types/body";
 import type { NutritionCheck } from "@/types/nutrition";
 import type { TrainingSession } from "@/types/training";
 
 function formatKm(meters: number) {
   return meters > 0 ? `${(meters / 1000).toFixed(1)} km` : "-";
+}
+
+function formatKmValue(meters: number) {
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function formatRunningBreakdown(breakdown: RunningBreakdown) {
+  return `${formatKmValue(breakdown.structuredMeters)} running estructurado · ${formatKmValue(breakdown.mixedMeters)} mixto`;
 }
 
 function ComplementaryVolumeCard({
@@ -108,6 +119,7 @@ export function DashboardView({
     () => calculateDashboardMetrics(dashboardSessions, dashboardBodyChecks, dashboardNutritionChecks, period),
     [dashboardBodyChecks, dashboardNutritionChecks, dashboardSessions, period],
   );
+  const trends = useMemo(() => getWeeklyTrendMetrics(dashboardSessions), [dashboardSessions]);
   const periodSessions = useMemo(() => filterSessionsByPeriod(dashboardSessions, period), [dashboardSessions, period]);
   const secondaryActivitySummary = useMemo(() => summarizeSecondaryActivities(periodSessions), [periodSessions]);
   const weeklyComparison = useMemo(() => {
@@ -116,10 +128,9 @@ export function DashboardView({
     return compareWeeks(currentWeekSessions, previousWeekSessions);
   }, [dashboardSessions]);
   const isMetricsLoading = isLoading || !isReady || isPeriodPending;
-  const hasPeriodSessions = (metrics.sessions.value ?? 0) > 0;
-  const sessionsState = isMetricsLoading ? "loading" : hasPeriodSessions ? "ready" : "empty";
-  const runningState = isMetricsLoading ? "loading" : (metrics.runningKm.value ?? 0) > 0 ? "ready" : "empty";
-  const durationState = isMetricsLoading ? "loading" : (metrics.durationMinutes.value ?? 0) > 0 ? "ready" : "empty";
+  const sessionsState = isMetricsLoading ? "loading" : "ready";
+  const runningState = isMetricsLoading ? "loading" : "ready";
+  const durationState = isMetricsLoading ? "loading" : "ready";
   const rpeState = isMetricsLoading ? "loading" : metrics.averageRpe.value !== null ? "ready" : "empty";
   const metricValueState = (value: number | null) => (isMetricsLoading ? "loading" : value !== null ? "ready" : "empty");
   const handlePeriodChange = (nextPeriod: DashboardPeriod) => {
@@ -143,7 +154,7 @@ export function DashboardView({
 
   return (
     <>
-      <section className="mb-8 overflow-hidden rounded-md border border-[var(--line)] bg-[linear-gradient(135deg,rgba(56,217,159,0.14),rgba(21,27,24,0.98)_38%,rgba(12,16,15,0.98))] p-6 shadow-[0_30px_100px_rgba(0,0,0,0.32)] sm:p-8">
+      <section className="mb-8 overflow-hidden rounded-md border border-[var(--line)] bg-[linear-gradient(135deg,var(--accent-hero),rgba(21,27,24,0.98)_38%,rgba(12,16,15,0.98))] p-6 shadow-[0_30px_100px_rgba(0,0,0,0.32)] sm:p-8">
         <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[0.7rem] font-bold uppercase tracking-[0.28em] text-[var(--accent)]">Análisis del periodo</p>
@@ -163,7 +174,7 @@ export function DashboardView({
             <PeriodSelector value={period} onChange={handlePeriodChange} />
             <Link
               href="/training/import"
-              className="inline-flex items-center justify-center rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent)] px-4 py-3 text-sm font-black text-[#06100c] transition hover:bg-[var(--accent-strong)]"
+              className="inline-flex items-center justify-center rounded-md border border-[var(--accent-border)] bg-[var(--accent)] px-4 py-3 text-sm font-black text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)]"
             >
               Importar JSON
             </Link>
@@ -185,17 +196,19 @@ export function DashboardView({
           deltaTone={metrics.sessions.deltaTone}
           secondaryDelta={metrics.sessions.previousDeltaLabel}
           secondaryDeltaTone={metrics.sessions.previousDeltaTone}
+          comparison={metrics.sessions.comparisonDisplay}
           tone="strong"
           state={sessionsState}
         />
         <MetricCard
-          label="Km de running"
+          label="Carrera total"
           value={metrics.runningKm.formattedValue}
-          detail="Solo type running"
+          detail={formatRunningBreakdown(metrics.runningBreakdown)}
           delta={metrics.runningKm.deltaLabel}
           deltaTone={metrics.runningKm.deltaTone}
           secondaryDelta={metrics.runningKm.previousDeltaLabel}
           secondaryDeltaTone={metrics.runningKm.previousDeltaTone}
+          comparison={metrics.runningKm.comparisonDisplay}
           tone="strong"
           state={runningState}
         />
@@ -207,6 +220,7 @@ export function DashboardView({
           deltaTone={metrics.durationMinutes.deltaTone}
           secondaryDelta={metrics.durationMinutes.previousDeltaLabel}
           secondaryDeltaTone={metrics.durationMinutes.previousDeltaTone}
+          comparison={metrics.durationMinutes.comparisonDisplay}
           state={durationState}
         />
         <MetricCard
@@ -253,6 +267,10 @@ export function DashboardView({
 
       <section className="mt-8">
         <ComplementaryVolumeCard summary={secondaryActivitySummary} isLoading={isMetricsLoading} />
+      </section>
+
+      <section className="mt-8">
+        <TrendsSection trends={trends} isLoading={isMetricsLoading} />
       </section>
 
       <section className="mt-8">
@@ -393,7 +411,7 @@ export function DashboardView({
                 <dd className="mt-1 font-mono text-lg font-black">{weeklyComparison.current.sessions}</dd>
               </div>
               <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
-                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Running</dt>
+                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Carrera total</dt>
                 <dd className="mt-1 font-mono text-lg font-black">{(weeklyComparison.current.runMeters / 1000).toFixed(1)} km</dd>
               </div>
               <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">

@@ -28,7 +28,7 @@ export function WeeklyTrainingView({ seedSessions }: { seedSessions: TrainingSes
         title="Semana activa"
         description="Sesiones, volumen, carga y alertas de la semana más reciente registrada."
         action={
-          <Link href="/training/import" className="inline-flex rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[#06100c] transition hover:bg-[var(--accent-strong)]">
+          <Link href="/training/import" className="inline-flex rounded-md border border-[var(--accent-border)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)]">
             Importar JSON
           </Link>
         }
@@ -45,7 +45,7 @@ export function WeeklyTrainingView({ seedSessions }: { seedSessions: TrainingSes
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Semana" value={currentWeekKey} detail={`Anterior: ${previousWeekKey}`} tone="strong" />
         <MetricCard label="Sesiones" value={`${comparison.current.sessions}`} detail={`${comparison.current.hardSessions} duras`} tone="strong" />
-        <MetricCard label="Running" value={`${(comparison.current.runMeters / 1000).toFixed(1)} km`} detail={`${(comparison.previous.runMeters / 1000).toFixed(1)} km semana anterior`} />
+        <MetricCard label="Carrera total" value={`${(comparison.current.runMeters / 1000).toFixed(1)} km`} detail={`${(comparison.previous.runMeters / 1000).toFixed(1)} km semana anterior`} />
         <MetricCard label="Duración" value={`${comparison.current.durationMinutes}m`} detail={`${comparison.previous.durationMinutes}m semana anterior`} />
       </section>
 

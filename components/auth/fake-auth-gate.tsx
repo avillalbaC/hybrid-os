@@ -57,7 +57,7 @@ export function FakeLoginScreen() {
               autoComplete="username"
               value={user}
               onChange={(event) => setUser(event.target.value)}
-              className="mt-2 w-full rounded-md border border-[var(--line-strong)] bg-[var(--panel-soft)] px-3 py-2.5 text-sm text-[var(--foreground)] transition placeholder:text-[rgba(139,151,145,0.7)] focus:border-[rgba(56,217,159,0.45)]"
+              className="mt-2 w-full rounded-md border border-[var(--line-strong)] bg-[var(--panel-soft)] px-3 py-2.5 text-sm text-[var(--foreground)] transition placeholder:text-[rgba(139,151,145,0.7)] focus:border-[var(--accent-border-strong)]"
             />
           </div>
 
@@ -72,7 +72,7 @@ export function FakeLoginScreen() {
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-2 w-full rounded-md border border-[var(--line-strong)] bg-[var(--panel-soft)] px-3 py-2.5 text-sm text-[var(--foreground)] transition placeholder:text-[rgba(139,151,145,0.7)] focus:border-[rgba(56,217,159,0.45)]"
+              className="mt-2 w-full rounded-md border border-[var(--line-strong)] bg-[var(--panel-soft)] px-3 py-2.5 text-sm text-[var(--foreground)] transition placeholder:text-[rgba(139,151,145,0.7)] focus:border-[var(--accent-border-strong)]"
             />
           </div>
 
@@ -84,7 +84,7 @@ export function FakeLoginScreen() {
 
           <button
             type="submit"
-            className="w-full rounded-md border border-[rgba(56,217,159,0.34)] bg-[var(--accent-soft)] px-4 py-2.5 text-sm font-bold text-[var(--foreground)] transition hover:bg-[rgba(56,217,159,0.18)]"
+            className="w-full rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-4 py-2.5 text-sm font-bold text-[var(--foreground)] transition hover:bg-[var(--accent-hover-soft)]"
           >
             Entrar
           </button>

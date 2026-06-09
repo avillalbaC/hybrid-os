@@ -4,15 +4,27 @@ Este documento define el estado y plan de Hybrid OS tras migrar desde la app pri
 
 Decision actual:
 
+- Hybrid OS ya esta desplegado y funcionando en produccion privada en https://hybrid.alvarovillalba.es.
+- El portfolio publico sigue en https://alvarovillalba.es; Hybrid OS vive en subdominio separado.
 - Google Auth privado single-user con allow-list de emails ya funciona.
 - `user_id`, backfill y RLS ya estan activos.
-- Multiusuario real sigue como fase posterior.
+- La app es privada, no multiusuario abierto.
+- Multiusuario real sigue como fase posterior, no como estado actual.
 - No tocar primary keys todavia.
 - Antes de abrir varios usuarios reales hay que resolver `db_id` interno y `session_id` logico por usuario.
 
 ## Estado actual
 
 Hybrid OS es una app privada con Google Auth y Supabase Auth. Supabase contiene datos reales y sigue siendo la fuente principal.
+
+Produccion privada:
+
+- URL: https://hybrid.alvarovillalba.es.
+- Google Auth privado funciona.
+- Allow-list activa.
+- Acceso limitado al usuario autorizado.
+- No es una app multiusuario abierta.
+- El portfolio sigue separado en https://alvarovillalba.es.
 
 Tablas principales en Supabase:
 
@@ -59,8 +71,10 @@ Objetivo:
 Resultado:
 
 - Google Auth privado funciona.
+- Allow-list activa.
 - Las rutas privadas requieren sesion valida.
 - La app no esta abierta a varios usuarios reales.
+- Produccion privada disponible en https://hybrid.alvarovillalba.es.
 
 ### Fase 1B - `user_id` y backfill
 

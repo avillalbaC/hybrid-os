@@ -59,13 +59,13 @@ export function MainNav({
                 aria-current={isActive ? "page" : undefined}
                 className={`group flex h-10 items-center rounded-md border px-2 text-sm font-semibold transition ${
                   isActive
-                    ? "border-[rgba(56,217,159,0.26)] bg-[rgba(56,217,159,0.1)] text-[var(--foreground)] shadow-[inset_2px_0_0_var(--accent)]"
+                    ? "border-[var(--accent-border)] bg-[var(--accent-secondary-soft)] text-[var(--foreground)] shadow-[inset_2px_0_0_var(--accent)]"
                     : "border-transparent text-[var(--muted)] hover:border-[var(--line)] hover:bg-[rgba(244,247,244,0.03)] hover:text-[var(--foreground)] focus-visible:bg-[rgba(244,247,244,0.05)]"
                 } ${collapsed ? "justify-center" : ""}`}
               >
                 <span className={`grid size-7 shrink-0 place-items-center rounded-md border font-mono text-[0.68rem] ${
                   isActive
-                    ? "border-[rgba(56,217,159,0.28)] bg-[rgba(56,217,159,0.12)] text-[var(--accent-strong)]"
+                    ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-strong)]"
                     : "border-[var(--line)] bg-[rgba(244,247,244,0.02)] text-[rgba(139,151,145,0.82)] group-hover:text-[var(--muted-strong)]"
                 }`}>
                   {item.marker}
