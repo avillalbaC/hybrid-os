@@ -11,6 +11,7 @@ import {
 } from "@/lib/selectors/training";
 import { isPureRunningSession } from "@/lib/domain/training/session-kind";
 import { getRunningBreakdown, type RunningBreakdown } from "@/lib/domain/training/run-exposure";
+import { formatDuration } from "@/lib/utils/format";
 import {
   type DashboardPeriod,
   type PeriodRange,
@@ -431,9 +432,9 @@ function getExpectedLabel(period: DashboardPeriod) {
 
 function getPreviousFullDisplayLabel(period: DashboardPeriod) {
   const labels: Record<DashboardPeriod, string> = {
-    week: "Semana anterior completa",
-    month: "Mes anterior completo",
-    year: "Año anterior completo",
+    week: "Semana anterior",
+    month: "Mes anterior",
+    year: "Año anterior",
     all: "Histórico completo",
   };
 
@@ -806,7 +807,7 @@ export function calculateDashboardMetrics(
       previous: durationComparison.previousFullPeriod,
       period,
       periodComparison: durationComparison,
-      format: (value) => `${value ?? 0} min`,
+      format: (value) => formatDuration(value, { emptyLabel: "0 min" }),
     }),
     averageRpe: makeMetric({
       current: currentAverageRpe,

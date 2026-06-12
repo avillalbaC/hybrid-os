@@ -16,7 +16,7 @@ import {
 } from "@/lib/storage/training-storage";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
 import { repairJsonText, validateHybridOSImport, type ImportIssue } from "@/lib/validation/hybrid-os-input";
-import { formatMuscleName, formatTrainingType } from "@/lib/utils/format";
+import { formatDuration, formatKm, formatMuscleName, formatRpe, formatTrainingType } from "@/lib/utils/format";
 import type { HybridOSAppInput, TrainingSession } from "@/types/training";
 
 const sampleInput = `{
@@ -606,6 +606,47 @@ function buildMainFeedback(
   };
 }
 
+function getImportStatusBadge(
+  validation: ValidationState,
+  saveStatus: ImportSaveStatus,
+  dryRunSuccess: DryRunSuccessState | null,
+  saveSuccess: SaveSuccessState | null,
+) {
+  if (saveSuccess) {
+    return { label: "Guardado", tone: "accent" as const };
+  }
+
+  if (saveStatus === "saving") {
+    return { label: "Guardando", tone: "neutral" as const };
+  }
+
+  if (saveStatus === "simulating") {
+    return { label: "Dry-run en curso", tone: "neutral" as const };
+  }
+
+  if (saveStatus === "duplicate" || validation.duplicates.length > 0) {
+    return { label: "Duplicado detectado", tone: "warning" as const };
+  }
+
+  if (dryRunSuccess) {
+    return { label: "Dry-run correcto", tone: "accent" as const };
+  }
+
+  if (validation.status === "error") {
+    return { label: "JSON inválido", tone: "warning" as const };
+  }
+
+  if (validation.status === "valid" && validation.warnings.length > 0) {
+    return { label: "Válido con warnings", tone: "warning" as const };
+  }
+
+  if (validation.status === "valid") {
+    return { label: "JSON válido", tone: "accent" as const };
+  }
+
+  return { label: "Sin validar", tone: "neutral" as const };
+}
+
 function MainFeedbackPanel({
   feedback,
   dryRunSuccess,
@@ -900,11 +941,11 @@ function PreviewCard({
       <dl className="mt-4 grid grid-cols-3 gap-2 text-sm">
         <div className="rounded-md border border-[var(--line)] p-2">
           <dt className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Duración</dt>
-          <dd className="mt-1 font-mono font-black">{session.durationMinutes ?? "-"}m</dd>
+          <dd className="mt-1 font-mono font-black">{formatDuration(session.durationMinutes)}</dd>
         </div>
         <div className="rounded-md border border-[var(--line)] p-2">
           <dt className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">RPE</dt>
-          <dd className="mt-1 font-mono font-black">{session.rpe ?? "-"}/10</dd>
+          <dd className="mt-1 font-mono font-black">{formatRpe(session.rpe)}</dd>
         </div>
         <div className="rounded-md border border-[var(--line)] p-2">
           <dt className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Bloques</dt>
@@ -916,7 +957,7 @@ function PreviewCard({
         </div>
         <div className="rounded-md border border-[var(--line)] p-2">
           <dt className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Running</dt>
-          <dd className="mt-1 font-mono font-black">{session.sessionMetrics.totalRunMeters}m</dd>
+          <dd className="mt-1 font-mono font-black">{formatKm(session.sessionMetrics.totalRunMeters, { forceKm: true })}</dd>
         </div>
         <div className="rounded-md border border-[var(--line)] p-2">
           <dt className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Calidad</dt>
@@ -1385,6 +1426,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
   const canDryRun = validation.status === "valid" && !isSaving && !isDryRunning;
   const canSave = validation.status === "valid" && validation.duplicates.length === 0 && !isSaving && !isDryRunning && saveStatus !== "saved";
   const mainFeedback = buildMainFeedback(validation, saveStatus, dryRunSuccess, saveSuccess, saveError);
+  const importStatusBadge = getImportStatusBadge(validation, saveStatus, dryRunSuccess, saveSuccess);
   const saveButtonCopy = validation.duplicates.length > 0
     ? "Duplicado detectado"
     : isSaving
@@ -1490,12 +1532,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
               {source === "remote" ? "Duplicados contra Supabase" : source === "seed-fallback" ? "Duplicados contra fallback" : "sincronizando"}
             </Badge>
             {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
-            <Badge tone={validation.status === "valid" ? "accent" : validation.status === "error" ? "warning" : "neutral"}>
-              {validation.status}
-            </Badge>
-            <Badge tone={saveStatus === "ready" || saveStatus === "saved" ? "accent" : saveStatus === "error" || saveStatus === "duplicate" ? "warning" : "neutral"}>
-              {saveStatus}
-            </Badge>
+            <Badge tone={importStatusBadge.tone}>{importStatusBadge.label}</Badge>
           </div>
         </div>
         <MainFeedbackPanel

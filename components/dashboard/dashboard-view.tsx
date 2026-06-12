@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { DashboardDataInsights } from "@/components/analytics/data-insights-panel";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -11,6 +12,7 @@ import { TrainingSessionCard } from "@/components/training/training-session-card
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { DisciplinesOverview } from "@/components/dashboard/disciplines-overview";
 import { TrendsSection } from "@/components/dashboard/trends-section";
+import { getTrainingDataInsights } from "@/lib/analytics/data-insights";
 import { getWeeklyTrendMetrics } from "@/lib/analytics/trends";
 import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
 import { filterSessionsByPeriod } from "@/lib/domain/dashboard/periods";
@@ -18,6 +20,7 @@ import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
 import { secondaryActivityKindLabels, summarizeSecondaryActivities, type SecondaryActivitySummary } from "@/lib/domain/training/secondary-activity";
 import { compareWeeks } from "@/lib/selectors/training";
 import { useDashboardData } from "@/lib/storage/use-dashboard-data";
+import { formatDuration } from "@/lib/utils/format";
 import type { DashboardPeriod } from "@/lib/domain/dashboard/periods";
 import type { RunningBreakdown } from "@/lib/domain/training/run-exposure";
 import type { BodyCheck } from "@/types/body";
@@ -73,7 +76,7 @@ function ComplementaryVolumeCard({
             </div>
             <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
               <dt className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Duración</dt>
-              <dd className="mt-1 font-mono text-xl font-black">{summary.durationMinutes}m</dd>
+              <dd className="mt-1 font-mono text-xl font-black">{formatDuration(summary.durationMinutes)}</dd>
             </div>
             <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
               <dt className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Distancia</dt>
@@ -120,6 +123,7 @@ export function DashboardView({
     [dashboardBodyChecks, dashboardNutritionChecks, dashboardSessions, period],
   );
   const trends = useMemo(() => getWeeklyTrendMetrics(dashboardSessions), [dashboardSessions]);
+  const dataAnalysis = useMemo(() => getTrainingDataInsights(dashboardSessions, { period }), [dashboardSessions, period]);
   const periodSessions = useMemo(() => filterSessionsByPeriod(dashboardSessions, period), [dashboardSessions, period]);
   const secondaryActivitySummary = useMemo(() => summarizeSecondaryActivities(periodSessions), [periodSessions]);
   const weeklyComparison = useMemo(() => {
@@ -263,6 +267,10 @@ export function DashboardView({
           deltaTone={metrics.sleepHours.deltaTone}
           state={metricValueState(metrics.sleepHours.value)}
         />
+      </section>
+
+      <section className="mt-8">
+        <DashboardDataInsights analysis={dataAnalysis} isLoading={isMetricsLoading} />
       </section>
 
       <section className="mt-8">
@@ -416,7 +424,7 @@ export function DashboardView({
               </div>
               <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
                 <dt className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Duración</dt>
-                <dd className="mt-1 font-mono text-lg font-black">{weeklyComparison.current.durationMinutes}m</dd>
+                <dd className="mt-1 font-mono text-lg font-black">{formatDuration(weeklyComparison.current.durationMinutes)}</dd>
               </div>
               <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
                 <dt className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Fatiga</dt>

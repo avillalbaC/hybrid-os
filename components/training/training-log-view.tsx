@@ -8,9 +8,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { dashboardPeriods, filterSessionsByPeriod, type DashboardPeriod } from "@/lib/domain/dashboard/periods";
 import { getSessionRunMeters, getTotalRunExposureMeters } from "@/lib/domain/training/run-exposure";
 import { getSecondaryActivityKind, isSecondaryActivity } from "@/lib/domain/training/secondary-activity";
-import { calculateRunningKm, calculateTotalDuration } from "@/lib/selectors/training";
+import { calculateTotalDuration } from "@/lib/selectors/training";
 import { useTrainingSessions, type TrainingSessionWithSync } from "@/lib/storage/use-training-sessions";
-import { formatDataQuality, formatTag, formatTrainingType } from "@/lib/utils/format";
+import { formatDataQuality, formatDuration, formatKm as formatDistanceKm, formatTag, formatTrainingType } from "@/lib/utils/format";
 import type { TrainingSession, TrainingSessionType } from "@/types/training";
 
 type TypeFilter = "all" | TrainingSessionType | "recovery" | "secondary" | "padel" | "routes-walks";
@@ -77,7 +77,7 @@ function matchesTypeFilter(session: TrainingSession, filter: TypeFilter) {
 }
 
 function formatKm(meters: number) {
-  return meters > 0 ? `${(meters / 1000).toFixed(1)} km` : "-";
+  return meters > 0 ? formatDistanceKm(meters, { forceKm: true }) : "-";
 }
 
 function formatCompactDate(date: string) {
@@ -243,8 +243,8 @@ function SessionRow({ session }: { session: TrainingSessionWithSync }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 items-center gap-2 md:min-w-[360px]">
-        <p className="font-mono text-xs font-black text-[var(--foreground)]">{session.durationMinutes ?? "-"}m</p>
+      <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-4 md:min-w-[420px]">
+        <p className="font-mono text-xs font-black text-[var(--foreground)]">{formatDuration(session.durationMinutes)}</p>
         <p className="font-mono text-xs font-black text-[var(--foreground)]">RPE {session.rpe ?? "-"}</p>
         <p className="font-mono text-xs font-black text-[var(--foreground)]">{formatKm(getSessionRunMeters(session))}</p>
         <Link
@@ -346,12 +346,12 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
         </div>
         <div>
           <p className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Duración</p>
-          <p className="mt-1 font-mono text-2xl font-black text-[var(--foreground)]">{calculateTotalDuration(filteredSessions)}m</p>
+          <p className="mt-1 font-mono text-2xl font-black text-[var(--foreground)]">{formatDuration(calculateTotalDuration(filteredSessions))}</p>
         </div>
         <div>
           <p className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Carrera total</p>
-          <p className="mt-1 font-mono text-2xl font-black text-[var(--foreground)]">{calculateRunningKm(filteredSessions)} km</p>
-          <p className="mt-1 text-xs text-[var(--muted)]">{totalRunMeters} m</p>
+          <p className="mt-1 font-mono text-2xl font-black text-[var(--foreground)]">{formatDistanceKm(totalRunMeters, { forceKm: true })}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">{formatDistanceKm(totalRunMeters, { forceKm: true })} de exposición</p>
         </div>
         <div>
           <p className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">RPE medio</p>

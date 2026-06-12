@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { formatDataQuality, formatDate, formatTag, formatTrainingType } from "@/lib/utils/format";
+import { formatDataQuality, formatDate, formatDuration, formatRpe, formatTag, formatTrainingType } from "@/lib/utils/format";
 import type { TrainingSession } from "@/types/training";
 
 export function TrainingSessionCard({
@@ -47,11 +47,11 @@ export function TrainingSessionCard({
       <div className="mt-5 grid grid-cols-3 gap-2 text-sm">
         <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
           <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Duración</p>
-          <p className="mt-1 font-mono text-lg font-black text-[var(--foreground)]">{session.durationMinutes ? `${session.durationMinutes}m` : "Sin dato"}</p>
+          <p className="mt-1 font-mono text-lg font-black text-[var(--foreground)]">{formatDuration(session.durationMinutes)}</p>
         </div>
         <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
           <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">RPE</p>
-          <p className="mt-1 font-mono text-lg font-black text-[var(--foreground)]">{session.rpe ? `${session.rpe}/10` : "Sin dato"}</p>
+          <p className="mt-1 font-mono text-lg font-black text-[var(--foreground)]">{formatRpe(session.rpe)}</p>
         </div>
         <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
           <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Feeling</p>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { MuscleDataInsightCard } from "@/components/analytics/data-insights-panel";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -9,8 +10,8 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
-import { calculateExpectedProgress } from "@/lib/domain/dashboard/metrics";
-import { filterSessionsByPeriod, getLatestDate, getPeriodDetail, getPeriodTitle, resolvePeriodReferenceDate, type DashboardPeriod } from "@/lib/domain/dashboard/periods";
+import { getTrainingDataInsights } from "@/lib/analytics/data-insights";
+import { filterSessionsByPeriod, getPeriodDetail, getPeriodTitle, type DashboardPeriod } from "@/lib/domain/dashboard/periods";
 import { getTotalRunExposureMeters } from "@/lib/domain/training/run-exposure";
 import {
   calculateMuscleGroups,
@@ -205,6 +206,24 @@ function getSecondaryRecommendation(alerts: DisplayAlert[]) {
   return alerts.some((alert) => alert.level !== "Info") ? alerts[0]?.detail : null;
 }
 
+function getLoadCategory(totalLoad: number, sessionCount: number) {
+  if (totalLoad <= 0 || sessionCount === 0) {
+    return { label: "Carga baja del periodo", tone: "neutral" as const };
+  }
+
+  const averageLoad = totalLoad / sessionCount;
+
+  if (totalLoad >= 2500 || averageLoad >= 650) {
+    return { label: "Carga alta del periodo", tone: "positive" as const };
+  }
+
+  if (totalLoad >= 900 || averageLoad >= 300) {
+    return { label: "Carga moderada", tone: "neutral" as const };
+  }
+
+  return { label: "Carga baja del periodo", tone: "negative" as const };
+}
+
 function AlertCard({ alert }: { alert: DisplayAlert }) {
   const levelStyle = {
     Info: "border-[var(--line)] bg-[rgba(244,247,244,0.035)] text-[var(--muted-strong)]",
@@ -312,10 +331,7 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
   const periodSessions = useMemo(() => filterSessionsByPeriod(sessions, period), [period, sessions]);
   const primarySessions = useMemo(() => periodSessions.filter((session) => !isSecondaryActivity(session)), [periodSessions]);
   const analysisSessions = includeSecondaryActivities ? periodSessions : primarySessions;
-  const referenceSessions = useMemo(
-    () => (includeSecondaryActivities ? sessions : sessions.filter((session) => !isSecondaryActivity(session))),
-    [includeSecondaryActivities, sessions],
-  );
+  const dataAnalysis = useMemo(() => getTrainingDataInsights(analysisSessions, { period: "all" }), [analysisSessions]);
   const excludedSecondaryCount = periodSessions.length - primarySessions.length;
   const muscleSummary = useMemo(() => calculateMuscleSummary(analysisSessions), [analysisSessions]);
   const ranking = useMemo(() => getTopMuscles(muscleSummary, 100), [muscleSummary]);
@@ -336,14 +352,7 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
   const displayAlerts = useMemo(() => getDisplayAlerts(alerts), [alerts]);
   const secondaryRecommendation = useMemo(() => getSecondaryRecommendation(displayAlerts), [displayAlerts]);
   const totalLoad = getMuscleLoadTotal(muscleSummary);
-  const referenceDate = resolvePeriodReferenceDate(period, getLatestDate(referenceSessions));
-  const loadProgress = calculateExpectedProgress({
-    items: referenceSessions,
-    period,
-    referenceDate,
-    currentValue: totalLoad,
-    valueForRange: (items) => getMuscleLoadTotal(calculateMuscleSummary(items)),
-  });
+  const loadCategory = getLoadCategory(totalLoad, analysisSessions.length);
   const maxLoad = getMuscleLoadMax(muscleSummary);
   const lowerBody = getGroup(groups, "lowerBody");
   const upperBody = getGroup(groups, "upperBody");
@@ -421,8 +430,8 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
           label="Carga total"
           value={`${totalLoad}`}
           detail={`${analysisSessions.length} sesiones analizadas${includeSecondaryActivities ? "" : ` · ${excludedSecondaryCount} secundarias fuera`}`}
-          delta={loadProgress.label}
-          deltaTone={loadProgress.tone}
+          delta={loadCategory.label}
+          deltaTone={loadCategory.tone}
           tone="strong"
           state={totalLoadState}
         />
@@ -430,6 +439,10 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
         <MetricCard label="Tren inferior" value={`${lowerBodyPercent}%`} detail={`${lowerBody?.load ?? 0} puntos · ${lowerBodyPercent}% de carga`} state={ratioState} />
         <MetricCard label="Tren superior" value={`${upperBodyPercent}%`} detail={`${upperBody?.load ?? 0} puntos · ${upperBodyPercent}% de carga`} state={ratioState} />
         <MetricCard label="Core/lumbar" value={`${corePercent}%`} detail={`${coreGroup?.load ?? 0} puntos · ${corePercent}% de carga`} state={ratioState} />
+      </section>
+
+      <section className="mt-6">
+        <MuscleDataInsightCard analysis={dataAnalysis} isLoading={isMetricsLoading} />
       </section>
 
       {isMetricsLoading ? (

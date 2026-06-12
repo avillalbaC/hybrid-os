@@ -13,6 +13,70 @@ export function formatLongDate(date: string) {
   }).format(new Date(date));
 }
 
+export function formatKm(meters: number | null | undefined, options: { forceKm?: boolean; emptyLabel?: string } = {}) {
+  if (meters === null || meters === undefined) {
+    return options.emptyLabel ?? "0 m";
+  }
+
+  const value = meters ?? 0;
+  return options.forceKm || value >= 1000 ? `${(value / 1000).toFixed(1)} km` : `${Math.round(value)} m`;
+}
+
+export function formatMeters(meters: number | null | undefined) {
+  if (meters === null || meters === undefined) {
+    return "Sin dato";
+  }
+
+  return `${Math.round(meters).toLocaleString("es-ES")} m`;
+}
+
+export function formatDuration(minutes: number | null | undefined, options: { compact?: boolean; emptyLabel?: string } = {}) {
+  const emptyLabel = options.emptyLabel ?? "Sin dato";
+
+  if (minutes === null || minutes === undefined) {
+    return emptyLabel;
+  }
+
+  const roundedMinutes = Math.round(minutes);
+
+  if (roundedMinutes <= 0) {
+    return emptyLabel;
+  }
+
+  if (options.compact && roundedMinutes >= 120) {
+    return `${(roundedMinutes / 60).toFixed(1)} h`;
+  }
+
+  if (roundedMinutes < 60) {
+    return `${roundedMinutes} min`;
+  }
+
+  const hours = Math.floor(roundedMinutes / 60);
+  const remainingMinutes = roundedMinutes % 60;
+
+  return remainingMinutes > 0 ? `${hours} h ${remainingMinutes} min` : `${hours} h`;
+}
+
+export function formatLoadKg(kg: number | null | undefined) {
+  if (kg === null || kg === undefined) {
+    return "Sin dato";
+  }
+
+  return kg >= 1000 ? `${(kg / 1000).toFixed(1)} t` : `${Math.round(kg).toLocaleString("es-ES")} kg`;
+}
+
+export function formatRpe(rpe: number | null | undefined) {
+  return typeof rpe === "number" && rpe > 0 ? `${rpe}/10` : "Sin dato";
+}
+
+export function formatHeartRate(bpm: number | null | undefined) {
+  return typeof bpm === "number" && bpm > 0 ? `${Math.round(bpm)} bpm` : "Sin dato";
+}
+
+export function formatCalories(kcal: number | null | undefined) {
+  return typeof kcal === "number" && kcal > 0 ? `${Math.round(kcal).toLocaleString("es-ES")} kcal` : "Sin dato";
+}
+
 export function formatTrainingType(type: string) {
   const labels: Record<string, string> = {
     crossfit: "CrossFit",

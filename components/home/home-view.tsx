@@ -2,20 +2,22 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import { QuickDataInsightCard } from "@/components/analytics/data-insights-panel";
 import { TrainingMixCard } from "@/components/home/training-mix-card";
 import { QuickTrendsCard } from "@/components/dashboard/trends-section";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
+import { getTrainingDataInsights } from "@/lib/analytics/data-insights";
 import { getWeeklyTrendMetrics } from "@/lib/analytics/trends";
-import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
+import { calculateDashboardMetrics, type DashboardMetric } from "@/lib/domain/dashboard/metrics";
 import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
 import { getSessionRunMeters, getTotalRunExposureMeters, type RunningBreakdown } from "@/lib/domain/training/run-exposure";
 import { secondaryActivityKindLabels, summarizeSecondaryActivities, type SecondaryActivitySummary } from "@/lib/domain/training/secondary-activity";
 import { calculateTrainingMix, type TrainingModality } from "@/lib/domain/training/training-mix";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
-import { formatDataQuality, formatDate, formatMuscleName, formatTrainingType } from "@/lib/utils/format";
+import { formatDataQuality, formatDate, formatDuration, formatKm, formatMuscleName, formatRpe, formatTrainingType } from "@/lib/utils/format";
 import type { BodyCheck } from "@/types/body";
 import type { NutritionCheck } from "@/types/nutrition";
 import type { MuscleName, TrainingSession } from "@/types/training";
@@ -107,12 +109,62 @@ function getWeeklyFatigue(sessions: TrainingSession[]) {
   return sessions.reduce((total, session) => total + session.sessionMetrics.fatigueCost, 0);
 }
 
-function formatKmFromMeters(meters: number) {
-  return `${(meters / 1000).toFixed(1)} km`;
+function formatRunningBreakdown(breakdown: RunningBreakdown) {
+  return `${formatKm(breakdown.structuredMeters, { forceKm: true })} running · ${formatKm(breakdown.mixedMeters, { forceKm: true })} mixto`;
 }
 
-function formatRunningBreakdown(breakdown: RunningBreakdown) {
-  return `${formatKmFromMeters(breakdown.structuredMeters)} running estructurado · ${formatKmFromMeters(breakdown.mixedMeters)} mixto`;
+function getHomeStatusLabel(metric: DashboardMetric) {
+  const status = metric.comparisonDisplay?.badgeLabel ?? metric.deltaLabel;
+
+  if (status.includes("Por encima")) {
+    return "Sobre ritmo";
+  }
+
+  if (status.includes("Por debajo")) {
+    return "Bajo ritmo";
+  }
+
+  if (status.includes("Referencia") || status.includes("Sin referencia")) {
+    return "Histórico insuficiente";
+  }
+
+  if (status.includes("Histórico completo")) {
+    return "Histórico completo";
+  }
+
+  return "En ritmo";
+}
+
+function getHomeStatusTone(metric: DashboardMetric) {
+  return metric.comparisonDisplay?.badgeTone ?? metric.deltaTone;
+}
+
+function getExpectedContext(metric: DashboardMetric) {
+  const comparison = metric.comparisonDisplay;
+
+  if (!comparison?.expectedValue) {
+    return undefined;
+  }
+
+  return `${comparison.expectedLabel}: ${comparison.expectedValue}`;
+}
+
+function getExpectedDeltaContext(metric: DashboardMetric) {
+  const comparison = metric.comparisonDisplay;
+
+  if (!comparison?.deltaVsExpectedLabel) {
+    return undefined;
+  }
+
+  return `${comparison.deltaVsExpectedLabel} vs esperado`;
+}
+
+function getRpeStatus(rpe: number | null) {
+  if (rpe === null) {
+    return "Sin dato suficiente";
+  }
+
+  return rpe >= 8 ? "Alto" : "Normal";
 }
 
 function getWeeklyReading({
@@ -249,7 +301,7 @@ function getNextAction({
 function LatestSessionCard({ session }: { session: TrainingSession }) {
   const sessionRunMeters = getSessionRunMeters(session);
   const runningKm = sessionRunMeters > 0
-    ? formatKmFromMeters(sessionRunMeters)
+    ? formatKm(sessionRunMeters)
     : "Sin dato";
 
   return (
@@ -266,11 +318,11 @@ function LatestSessionCard({ session }: { session: TrainingSession }) {
       <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
         <div className="rounded-md border border-[var(--line)] p-2">
           <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Duración</p>
-          <p className="mt-1 font-mono font-black">{session.durationMinutes ? `${session.durationMinutes}m` : "Sin dato"}</p>
+          <p className="mt-1 font-mono font-black">{formatDuration(session.durationMinutes)}</p>
         </div>
         <div className="rounded-md border border-[var(--line)] p-2">
           <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">RPE</p>
-          <p className="mt-1 font-mono font-black">{session.rpe ? `${session.rpe}/10` : "Sin dato"}</p>
+          <p className="mt-1 font-mono font-black">{formatRpe(session.rpe)}</p>
         </div>
         <div className="rounded-md border border-[var(--line)] p-2">
           <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Carrera</p>
@@ -440,21 +492,6 @@ function HeroMetricValue({
   return <p className="mt-2 whitespace-nowrap font-mono text-2xl font-black">{value}</p>;
 }
 
-function formatDurationLabel(minutes: number) {
-  if (minutes <= 0) {
-    return "0 min";
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-
-  if (hours === 0) {
-    return `${remainingMinutes} min`;
-  }
-
-  return `${hours} h ${String(remainingMinutes).padStart(2, "0")} min`;
-}
-
 function SecondaryActivityCard({
   isLoading,
   summary,
@@ -489,7 +526,7 @@ function SecondaryActivityCard({
             </div>
             <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
               <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Duración</dt>
-              <dd className="mt-1 font-mono text-lg font-black">{formatDurationLabel(summary.durationMinutes)}</dd>
+              <dd className="mt-1 font-mono text-lg font-black">{formatDuration(summary.durationMinutes)}</dd>
             </div>
           </dl>
           <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">{topKinds || "Sin tipo dominante"}</p>
@@ -532,6 +569,7 @@ export function HomeView({
 }) {
   const { sessions: combinedSessions, pendingSessions, source, syncMessage, isLoading, isReady } = useTrainingSessions(sessions);
   const metrics = calculateDashboardMetrics(combinedSessions, bodyChecks, nutritionChecks, "week");
+  const dataAnalysis = useMemo(() => getTrainingDataInsights(combinedSessions, { period: "week" }), [combinedSessions]);
   const trends = useMemo(() => getWeeklyTrendMetrics(combinedSessions), [combinedSessions]);
   const { currentWeekSessions } = useMemo(() => getLatestWeekSessions(combinedSessions), [combinedSessions]);
   const secondaryActivitySummary = useMemo(() => summarizeSecondaryActivities(currentWeekSessions), [currentWeekSessions]);
@@ -635,10 +673,9 @@ export function HomeView({
             <MetricCard
               label="Sesiones semana"
               value={metrics.sessions.formattedValue}
-              detail="Estado semanal"
-              delta={metrics.sessions.deltaLabel}
-              deltaTone={metrics.sessions.deltaTone}
-              comparison={metrics.sessions.comparisonDisplay}
+              detail={getExpectedContext(metrics.sessions) ?? "Estado semanal"}
+              delta={getHomeStatusLabel(metrics.sessions)}
+              deltaTone={getHomeStatusTone(metrics.sessions)}
               tone="strong"
               state={sessionsState}
             />
@@ -648,9 +685,10 @@ export function HomeView({
               label="Carrera total"
               value={metrics.runningKm.formattedValue}
               detail={formatRunningBreakdown(metrics.runningBreakdown)}
-              delta={metrics.runningKm.deltaLabel}
-              deltaTone={metrics.runningKm.deltaTone}
-              comparison={metrics.runningKm.comparisonDisplay}
+              delta={getHomeStatusLabel(metrics.runningKm)}
+              deltaTone={getHomeStatusTone(metrics.runningKm)}
+              secondaryDelta={getExpectedDeltaContext(metrics.runningKm)}
+              secondaryDeltaTone={getHomeStatusTone(metrics.runningKm)}
               tone="strong"
               state={runningState}
             />
@@ -659,19 +697,19 @@ export function HomeView({
             <MetricCard
               label="Duración"
               value={metrics.durationMinutes.formattedValue}
-              detail="Carga de la semana"
-              delta={metrics.durationMinutes.deltaLabel}
-              deltaTone={metrics.durationMinutes.deltaTone}
-              comparison={metrics.durationMinutes.comparisonDisplay}
+              detail={getExpectedDeltaContext(metrics.durationMinutes) ?? "Carga de la semana"}
+              delta={getHomeStatusLabel(metrics.durationMinutes)}
+              deltaTone={getHomeStatusTone(metrics.durationMinutes)}
               state={durationState}
             />
           </MetricLink>
           <MetricLink href="/dashboard">
-            <MetricCard label="RPE medio" value={metrics.averageRpe.formattedValue} detail="Intensidad percibida" delta={metrics.averageRpe.deltaLabel} deltaTone={metrics.averageRpe.deltaTone} state={rpeState} />
+            <MetricCard label="RPE medio" value={metrics.averageRpe.formattedValue} detail="Intensidad percibida" delta={getRpeStatus(metrics.averageRpe.value)} deltaTone={metrics.averageRpe.value !== null && metrics.averageRpe.value >= 8 ? "negative" : "neutral"} state={rpeState} />
           </MetricLink>
         </section>
 
-        <section className="order-1 grid gap-5 lg:order-2 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="order-1 grid gap-5 lg:order-2 lg:grid-cols-3">
+          <QuickDataInsightCard analysis={dataAnalysis} isLoading={isMetricsLoading} />
           <WatchCard signals={watchSignals} isLoading={isMetricsLoading} />
           <NextActionCard action={nextAction} isLoading={isMetricsLoading} />
         </section>

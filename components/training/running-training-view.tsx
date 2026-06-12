@@ -1,11 +1,14 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
+import { RunningDataInsightCard } from "@/components/analytics/data-insights-panel";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonBlock } from "@/components/ui/skeleton";
+import { getTrainingDataInsights } from "@/lib/analytics/data-insights";
 import {
   getLatestDate,
   getPeriodRange,
@@ -23,28 +26,8 @@ import {
   summarizeRunning,
 } from "@/lib/domain/training/running";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
-import { formatDate, formatTrainingType } from "@/lib/utils/format";
+import { formatDate, formatDuration, formatHeartRate, formatKm, formatRpe, formatTrainingType } from "@/lib/utils/format";
 import type { TrainingSession } from "@/types/training";
-
-function formatKm(meters: number) {
-  return `${(meters / 1000).toFixed(1)} km`;
-}
-
-function formatDuration(minutes: number | null) {
-  if (!minutes) {
-    return "Sin dato";
-  }
-
-  const roundedMinutes = Math.round(minutes);
-  const hours = Math.floor(roundedMinutes / 60);
-  const remainingMinutes = roundedMinutes % 60;
-
-  if (hours === 0) {
-    return `${remainingMinutes} min`;
-  }
-
-  return `${hours} h ${String(remainingMinutes).padStart(2, "0")} min`;
-}
 
 function formatPace(secondsPerKm: number | null) {
   if (!secondsPerKm) {
@@ -148,6 +131,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
   const historicalStats = summarizeRunning(runningRows);
   const shoeVolumes = getRunningShoeVolumes(runningRows);
   const weeklySummaries = groupRunningByCalendarWeek(runningRows, 12);
+  const dataAnalysis = useMemo(() => getTrainingDataInsights(sessions, { period: "week" }), [sessions]);
   const latestTrainingDate = getLatestDate(sessions);
   const weekReferenceDate = resolvePeriodReferenceDate("week", latestTrainingDate);
   const monthReferenceDate = resolvePeriodReferenceDate("month", latestTrainingDate);
@@ -181,24 +165,24 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard
-          label="Carrera total semana"
-          value={formatKm(currentWeekExposure.totalRunExposureMeters)}
-          detail={`${formatKm(currentWeekExposure.structuredMeters)} running · ${formatKm(currentWeekExposure.mixedMeters)} mixto`}
-          delta={formatDelta(currentWeekExposure.totalRunExposureMeters, previousWeekExposure.totalRunExposureMeters, formatKm)}
+          label="Esta semana"
+          value={formatKm(currentWeekExposure.totalRunExposureMeters, { forceKm: true })}
+          detail={`${formatKm(currentWeekExposure.structuredMeters, { forceKm: true })} running · ${formatKm(currentWeekExposure.mixedMeters, { forceKm: true })} mixto`}
+          delta={formatDelta(currentWeekExposure.totalRunExposureMeters, previousWeekExposure.totalRunExposureMeters, (value) => formatKm(value, { forceKm: true }))}
           deltaTone={getDeltaTone(currentWeekExposure.totalRunExposureMeters, previousWeekExposure.totalRunExposureMeters)}
           tone="strong"
           state={weekKmState}
         />
         <MetricCard
-          label="Carrera total mes"
-          value={formatKm(currentMonthExposure.totalRunExposureMeters)}
-          detail="Volumen de impacto"
+          label="Este mes"
+          value={formatKm(currentMonthExposure.totalRunExposureMeters, { forceKm: true })}
+          detail="Volumen total de impacto"
           tone="strong"
           state={monthKmState}
         />
         <MetricCard label="Sesiones running" value={`${historicalStats.sessions}`} detail="Solo type running" state={sessionsState} />
         <MetricCard label="Duración running" value={formatDuration(historicalStats.durationMinutes)} detail="Histórico con dato" state={durationState} />
-        <MetricCard label="RPE medio running" value={historicalStats.averageRpe ? `${historicalStats.averageRpe}` : "Sin dato"} detail="Sesiones con RPE" state={rpeState} />
+        <MetricCard label="RPE medio running" value={formatRpe(historicalStats.averageRpe)} detail="Sesiones con RPE" state={rpeState} />
       </section>
 
       <section className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px]">
@@ -215,7 +199,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
               <ComparisonSkeleton />
             ) : (
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <ComparisonCard label="Km running estructurado" current={periods.week.runMeters} previous={periods.previousWeek.runMeters} formatter={formatKm} />
+              <ComparisonCard label="Km running estructurado" current={periods.week.runMeters} previous={periods.previousWeek.runMeters} formatter={(value) => formatKm(value, { forceKm: true })} />
               <ComparisonCard label="Sesiones" current={periods.week.sessions} previous={periods.previousWeek.sessions} formatter={(value) => `${value}`} />
               <ComparisonCard
                 label="Duración"
@@ -243,46 +227,61 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
                 <EmptyState title="Sin sesiones de running" description="Cuando haya sesiones type running, aparecerán aquí con ritmo, duración, FC media y RPE." />
               </div>
             ) : (
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full min-w-[760px] text-left text-sm">
-                  <thead className="border-b border-[var(--line)] text-[0.68rem] uppercase tracking-[0.18em] text-[var(--muted)]">
-                    <tr>
-                      <th className="py-3 pr-4 font-bold">Fecha</th>
-                      <th className="px-4 py-3 font-bold">Título</th>
-                      <th className="px-4 py-3 font-bold">Distancia</th>
-                      <th className="px-4 py-3 font-bold">Duración</th>
-                      <th className="px-4 py-3 font-bold">Ritmo</th>
-                      <th className="px-4 py-3 font-bold">FC media</th>
-                      <th className="py-3 pl-4 font-bold">RPE</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--line)]">
-                    {runningRows.map((row) => (
-                      <tr key={row.session.id} className="align-top">
-                        <td className="py-4 pr-4 text-[var(--muted-strong)]">{formatDate(row.session.date)}</td>
-                        <td className="px-4 py-4">
-                          <Link href={`/training/${row.session.id}`} className="font-semibold text-[var(--foreground)] transition hover:text-[var(--accent-strong)]">
-                            {row.session.title}
-                          </Link>
-                          <p className="mt-1 text-xs text-[var(--muted)]">{formatTrainingType(row.session.type)}</p>
-                        </td>
-                        <td className="px-4 py-4 font-mono font-black">{formatKm(row.runMeters)}</td>
-                        <td className="px-4 py-4 text-[var(--muted-strong)]">{formatDuration(row.durationMinutes)}</td>
-                        <td className="px-4 py-4 text-[var(--muted-strong)]">{formatPace(row.paceSecondsPerKm)}</td>
-                        <td className="px-4 py-4 text-[var(--muted-strong)]">{row.averageHeartRate ? `${row.averageHeartRate} bpm` : "Sin dato"}</td>
-                        <td className="py-4 pl-4 text-[var(--muted-strong)]">{row.session.rpe ?? "Sin dato"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="mt-4 overflow-hidden rounded-md border border-[var(--line)]">
+                <div className="hidden grid-cols-[90px_minmax(0,1.5fr)_90px_120px_90px_100px_70px] gap-3 border-b border-[var(--line)] bg-[rgba(244,247,244,0.035)] px-3 py-3 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--muted)] lg:grid">
+                  <span>Fecha</span>
+                  <span>Título</span>
+                  <span>Distancia</span>
+                  <span>Duración</span>
+                  <span>Ritmo</span>
+                  <span>FC media</span>
+                  <span>RPE</span>
+                </div>
+                <div className="divide-y divide-[var(--line)]">
+                  {runningRows.map((row) => (
+                    <article key={row.session.id} className="grid gap-3 bg-[rgba(244,247,244,0.018)] px-3 py-4 text-sm lg:grid-cols-[90px_minmax(0,1.5fr)_90px_120px_90px_100px_70px] lg:items-center">
+                      <p className="font-mono text-xs font-black uppercase tracking-[0.12em] text-[var(--accent)] lg:text-[var(--muted-strong)]">{formatDate(row.session.date)}</p>
+                      <div className="min-w-0">
+                        <Link href={`/training/${row.session.id}`} className="block truncate font-semibold text-[var(--foreground)] transition hover:text-[var(--accent-strong)]">
+                          {row.session.title}
+                        </Link>
+                        <p className="mt-1 text-xs text-[var(--muted)]">{formatTrainingType(row.session.type)}</p>
+                      </div>
+                      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5 lg:contents">
+                        <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-2 lg:border-0 lg:bg-transparent lg:p-0">
+                          <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)] lg:sr-only">Distancia</dt>
+                          <dd className="mt-1 font-mono font-black lg:mt-0">{formatKm(row.runMeters, { forceKm: true })}</dd>
+                        </div>
+                        <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-2 lg:border-0 lg:bg-transparent lg:p-0">
+                          <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)] lg:sr-only">Duración</dt>
+                          <dd className="mt-1 text-[var(--muted-strong)] lg:mt-0">{formatDuration(row.durationMinutes)}</dd>
+                        </div>
+                        <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-2 lg:border-0 lg:bg-transparent lg:p-0">
+                          <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)] lg:sr-only">Ritmo</dt>
+                          <dd className="mt-1 text-[var(--muted-strong)] lg:mt-0">{formatPace(row.paceSecondsPerKm)}</dd>
+                        </div>
+                        <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-2 lg:border-0 lg:bg-transparent lg:p-0">
+                          <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)] lg:sr-only">FC media</dt>
+                          <dd className="mt-1 text-[var(--muted-strong)] lg:mt-0">{formatHeartRate(row.averageHeartRate)}</dd>
+                        </div>
+                        <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-2 lg:border-0 lg:bg-transparent lg:p-0">
+                          <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)] lg:sr-only">RPE</dt>
+                          <dd className="mt-1 text-[var(--muted-strong)] lg:mt-0">{formatRpe(row.session.rpe)}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  ))}
+                </div>
               </div>
             )}
           </Card>
         </div>
 
         <aside className="space-y-5">
+          <RunningDataInsightCard analysis={dataAnalysis} isLoading={isMetricsLoading} />
+
           <Card>
-            <h3 className="text-lg font-semibold">Volumen de carrera</h3>
+            <h3 className="text-lg font-semibold">Volumen de carrera histórico</h3>
             {isMetricsLoading ? (
               <div className="mt-4 space-y-3" aria-label="Tipo de carrera calculando">
                 <SkeletonBlock className="h-12 w-full" />
@@ -295,9 +294,9 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
               </div>
             ) : (
               <dl className="mt-4 space-y-3">
-                <StatLine label="Total" value={formatKm(allExposure.totalRunExposureMeters)} />
-                <StatLine label="Running estructurado" value={formatKm(allExposure.structuredMeters)} />
-                <StatLine label="Carrera en sesiones mixtas" value={formatKm(allExposure.mixedMeters)} />
+                <StatLine label="Histórico total" value={formatKm(allExposure.totalRunExposureMeters, { forceKm: true })} />
+                <StatLine label="Running estructurado" value={formatKm(allExposure.structuredMeters, { forceKm: true })} />
+                <StatLine label="Carrera en sesiones mixtas" value={formatKm(allExposure.mixedMeters, { forceKm: true })} />
               </dl>
             )}
           </Card>
@@ -321,7 +320,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
                     <div className="mb-2 flex items-center justify-between gap-3 text-sm">
                       <span className="font-mono font-black text-[var(--foreground)]">{week.weekKey}</span>
                       <span className="text-[var(--muted)]">
-                        {formatKm(week.runMeters)} · {week.sessions} sesiones
+                        {formatKm(week.runMeters, { forceKm: true })} · {week.sessions} sesiones
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-[rgba(244,247,244,0.08)]">
@@ -350,7 +349,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
             ) : (
               <dl className="mt-4 space-y-3">
                 {shoeVolumes.map((entry) => (
-                  <StatLine key={entry.shoes} label={entry.shoes} value={`${formatKm(entry.runMeters)} · ${entry.sessions} sesiones`} />
+                  <StatLine key={entry.shoes} label={entry.shoes} value={`${formatKm(entry.runMeters, { forceKm: true })} · ${entry.sessions} sesiones`} />
                 ))}
               </dl>
             )}

@@ -73,8 +73,9 @@ export function MetricCard({
       {state === "ready" && comparison ? (
         <div className="mt-4 space-y-3">
           <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
+            <p className="mb-2 text-[0.62rem] font-black uppercase tracking-[0.16em] text-[var(--accent)]">Ritmo actual</p>
             {comparison.expectedValue ? (
-              <p className="text-sm leading-6 text-[var(--muted-strong)]">
+              <p className="break-words text-sm leading-6 text-[var(--muted-strong)]">
                 <span>{comparison.expectedLabel}</span>{" "}
                 <span className="font-mono font-black text-[var(--foreground)]">{comparison.expectedValue}</span>
                 {comparison.deltaVsExpectedLabel ? (
@@ -88,7 +89,8 @@ export function MetricCard({
               <p className="text-sm font-semibold leading-6 text-[var(--muted-strong)]">Referencia insuficiente</p>
             )}
           </div>
-          <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 text-sm leading-6 text-[var(--muted-strong)]">
+          <div className="break-words rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 text-sm leading-6 text-[var(--muted-strong)]">
+            <p className="mb-2 text-[0.62rem] font-black uppercase tracking-[0.16em] text-[var(--accent)]">Referencia</p>
             <p>
               <span>{comparison.previousFullLabel}</span>{" "}
               <span className="font-mono font-black text-[var(--foreground)]">{comparison.previousFullValue ?? "Sin datos"}</span>

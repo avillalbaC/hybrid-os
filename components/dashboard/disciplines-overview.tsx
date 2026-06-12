@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { SkeletonBlock } from "@/components/ui/skeleton";
 import { TrainingSessionCard } from "@/components/training/training-session-card";
 import { getDisciplineSummaries } from "@/lib/domain/training/disciplines";
-import { formatDate, formatMuscleName, formatTrainingType } from "@/lib/utils/format";
+import { formatDate, formatDuration, formatMuscleName, formatTrainingType } from "@/lib/utils/format";
 import type { TrainingSession, TrainingSessionType } from "@/types/training";
 
 export function DisciplinesOverview({
@@ -101,7 +101,7 @@ export function DisciplinesOverview({
               <dl className="mt-4 grid grid-cols-3 gap-2 text-sm">
                 <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-2">
                   <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Duración</dt>
-                  <dd className="mt-1 font-mono font-black">{summary.durationMinutes}m</dd>
+                  <dd className="mt-1 font-mono font-black">{formatDuration(summary.durationMinutes, { compact: true })}</dd>
                 </div>
                 <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-2">
                   <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">RPE</dt>
@@ -109,7 +109,7 @@ export function DisciplinesOverview({
                 </div>
                 <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-2">
                   <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Horas</dt>
-                  <dd className="mt-1 font-mono font-black">{(summary.durationMinutes / 60).toFixed(1)}</dd>
+                  <dd className="mt-1 font-mono font-black">{(summary.durationMinutes / 60).toFixed(1)} h</dd>
                 </div>
               </dl>
               <div className="mt-3 flex flex-wrap gap-2">

@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { getSessionRunMeters } from "@/lib/domain/training/run-exposure";
 import { useTrainingSessions, type TrainingSessionWithSync } from "@/lib/storage/use-training-sessions";
-import { formatDataQuality, formatLongDate, formatMuscleName, formatMuscleRole, formatTag, formatTrainingType } from "@/lib/utils/format";
+import { formatCalories, formatDataQuality, formatDuration, formatKm, formatLoadKg, formatLongDate, formatMeters, formatMuscleName, formatMuscleRole, formatRpe, formatTag, formatTrainingType } from "@/lib/utils/format";
 import type { MuscleName, TrainingBlock, TrainingExercise, TrainingResult, TrainingSession } from "@/types/training";
 
 const statusLabels: Record<TrainingSession["status"], string> = {
@@ -52,16 +52,8 @@ function formatResult(result: TrainingResult | null) {
     .join(" · ") || result.type;
 }
 
-function formatMeters(meters: number | null | undefined) {
-  if (!meters) {
-    return null;
-  }
-
-  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${meters} m`;
-}
-
-function formatMinutes(minutes: number | null | undefined) {
-  return minutes === null || minutes === undefined ? "-" : `${minutes} min`;
+function formatRegisteredDuration(minutes: number | null | undefined) {
+  return minutes === null || minutes === undefined ? "sin duración registrada" : `${formatDuration(minutes)} registrados`;
 }
 
 function formatUnit(value: string | number | boolean | null | undefined, unit: string) {
@@ -70,6 +62,26 @@ function formatUnit(value: string | number | boolean | null | undefined, unit: s
   }
 
   return `${value} ${unit}`;
+}
+
+function formatQuickResult(session: TrainingSession) {
+  const result = session.result;
+
+  if (!result) {
+    return "sin resultado final exacto";
+  }
+
+  const formatted = formatResult(result);
+
+  if (formatted !== "-" && (result.score || result.timeSeconds)) {
+    return formatted;
+  }
+
+  if (result.type === "time" && !result.timeSeconds) {
+    return "sin tiempo final exacto";
+  }
+
+  return "sin resultado final exacto";
 }
 
 function getTopMuscles(session: TrainingSession, limit = 3) {
@@ -151,12 +163,12 @@ function ExecutiveSummary({
   const dominantLoad = topMuscles.length > 0
     ? topMuscles.map(([muscle]) => formatMuscleName(muscle).toLowerCase()).join(", ")
     : "sin carga muscular registrada";
-  const resultText = formatResult(session.result);
+  const resultText = formatQuickResult(session);
   const summaryParts = [
     formatTrainingType(session.type),
-    formatMinutes(session.durationMinutes),
-    `RPE ${session.rpe ?? "-"}`,
-    resultText !== "-" ? resultText : null,
+    formatRegisteredDuration(session.durationMinutes),
+    `RPE ${formatRpe(session.rpe)}`,
+    resultText,
     `carga dominante: ${dominantLoad}`,
   ].filter(Boolean);
 
@@ -181,8 +193,8 @@ function ExecutiveSummary({
         <div className="grid min-w-0 grid-cols-2 gap-3 sm:min-w-[360px]">
           <SummaryStat label="Fecha" value={formatLongDate(session.date)} />
           <SummaryStat label="Tipo" value={formatTrainingType(session.type)} />
-          <SummaryStat label="Duración" value={formatMinutes(session.durationMinutes)} tone="accent" />
-          <SummaryStat label="RPE" value={`${session.rpe ?? "-"}/10`} tone={session.rpe && session.rpe >= 8 ? "warning" : "neutral"} />
+          <SummaryStat label="Duración" value={formatDuration(session.durationMinutes)} tone="accent" />
+          <SummaryStat label="RPE" value={formatRpe(session.rpe)} tone={session.rpe && session.rpe >= 8 ? "warning" : "neutral"} />
         </div>
       </div>
     </section>
@@ -195,7 +207,7 @@ function ResultCard({
   session: TrainingSession;
 }) {
   const result = session.result;
-  const runMeters = formatMeters(getSessionRunMeters(session));
+  const runMeters = getSessionRunMeters(session) > 0 ? formatKm(getSessionRunMeters(session), { forceKm: true }) : null;
 
   return (
     <Card className="border-[var(--accent-border)]">
@@ -258,10 +270,10 @@ function MetadataSection({
             <CompactField label="Fecha reportada" value={formatOptional(session.reportedAt)} />
             <CompactField label="Date confidence" value={formatOptional(session.dateConfidence)} />
             <CompactField label="Date rule" value={formatOptional(session.dateRule)} />
-            <CompactField label="Calorías" value={formatOptional(session.sessionMetrics.totalCalories)} />
-            <CompactField label="Carga externa" value={formatUnit(session.sessionMetrics.totalExternalLoadKg, "kg")} />
+            <CompactField label="Calorías" value={formatCalories(session.sessionMetrics.totalCalories)} />
+            <CompactField label="Carga externa" value={formatLoadKg(session.sessionMetrics.totalExternalLoadKg)} />
             {ergMetrics.map((metric) => (
-              <CompactField key={metric.label} label={metric.label} value={formatMeters(metric.meters) ?? "-"} />
+              <CompactField key={metric.label} label={metric.label} value={formatMeters(metric.meters)} />
             ))}
           </dl>
         </div>
@@ -308,10 +320,10 @@ function getExerciseMetrics(exercise: TrainingExercise) {
   return [
     exercise.sets !== undefined ? `${formatOptional(exercise.sets)} sets` : null,
     exercise.reps !== undefined ? `${formatOptional(exercise.reps)} reps` : null,
-    exercise.loadKg !== undefined ? formatUnit(exercise.loadKg, "kg") : null,
-    exercise.distanceMeters !== undefined ? formatUnit(exercise.distanceMeters, "m") : null,
+    exercise.loadKg !== undefined ? formatLoadKg(exercise.loadKg) : null,
+    exercise.distanceMeters !== undefined ? formatMeters(exercise.distanceMeters) : null,
     exercise.durationSeconds !== undefined ? formatSeconds(exercise.durationSeconds) : null,
-    exercise.calories !== undefined ? formatUnit(exercise.calories, "cal") : null,
+    exercise.calories !== undefined ? formatCalories(exercise.calories) : null,
   ].filter(Boolean);
 }
 
@@ -345,7 +357,7 @@ function BlockCard({ block, index }: { block: TrainingBlock; index: number }) {
   const blockFacts = [
     block.roundsPlanned !== undefined ? `plan ${formatOptional(block.roundsPlanned)} rondas` : null,
     block.roundsCompleted !== undefined ? `hechas ${formatOptional(block.roundsCompleted)}` : null,
-    block.timeCapMinutes !== undefined ? `cap ${formatUnit(block.timeCapMinutes, "min")}` : null,
+    block.timeCapMinutes !== undefined ? `cap ${formatDuration(block.timeCapMinutes)}` : null,
     block.restSeconds !== undefined ? `rest ${formatUnit(block.restSeconds, "s")}` : null,
   ].filter(Boolean);
 

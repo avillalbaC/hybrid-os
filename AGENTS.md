@@ -51,6 +51,14 @@ Before editing, read the relevant docs and understand the existing flow. Do not 
 - Do not use `DROP`, `TRUNCATE`, mass `DELETE`, or destructive migrations unless explicitly instructed.
 - For schema changes, create incremental migrations.
 
+## Dev auth bypass rules
+
+- A Dev Auth Bypass exists only for local development/Codex review work.
+- It must never work in production and must use private server-side environment variables only, never `NEXT_PUBLIC`.
+- It must respect `ALLOWED_AUTH_EMAILS` and must not expose service role keys, cookies, tokens, or secrets to the client.
+- Use it when Codex needs to access protected routes for screenshots, audits, or review without manual Google OAuth.
+- Google Auth remains the real authentication flow for normal use and functional validation.
+
 ## Import flow rules
 
 The critical flow is:

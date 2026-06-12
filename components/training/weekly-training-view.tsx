@@ -10,6 +10,7 @@ import { TrainingSessionCard } from "@/components/training/training-session-card
 import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
 import { compareWeeks, getHardSessionsCount, getTopMuscles } from "@/lib/selectors/training";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
+import { formatDuration } from "@/lib/utils/format";
 import type { TrainingSession } from "@/types/training";
 
 export function WeeklyTrainingView({ seedSessions }: { seedSessions: TrainingSession[] }) {
@@ -46,7 +47,7 @@ export function WeeklyTrainingView({ seedSessions }: { seedSessions: TrainingSes
         <MetricCard label="Semana" value={currentWeekKey} detail={`Anterior: ${previousWeekKey}`} tone="strong" />
         <MetricCard label="Sesiones" value={`${comparison.current.sessions}`} detail={`${comparison.current.hardSessions} duras`} tone="strong" />
         <MetricCard label="Carrera total" value={`${(comparison.current.runMeters / 1000).toFixed(1)} km`} detail={`${(comparison.previous.runMeters / 1000).toFixed(1)} km semana anterior`} />
-        <MetricCard label="Duración" value={`${comparison.current.durationMinutes}m`} detail={`${comparison.previous.durationMinutes}m semana anterior`} />
+        <MetricCard label="Duración" value={formatDuration(comparison.current.durationMinutes)} detail={`${formatDuration(comparison.previous.durationMinutes)} semana anterior`} />
       </section>
 
       <section className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px]">
