@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardDataInsights } from "@/components/analytics/data-insights-panel";
+import { PeriodReportsSection } from "@/components/analysis/period-report-list";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -274,11 +275,15 @@ export function DashboardView({
       </section>
 
       <section className="mt-8">
-        <ComplementaryVolumeCard summary={secondaryActivitySummary} isLoading={isMetricsLoading} />
+        <TrendsSection trends={trends} isLoading={isMetricsLoading} />
       </section>
 
       <section className="mt-8">
-        <TrendsSection trends={trends} isLoading={isMetricsLoading} />
+        <PeriodReportsSection sessions={dashboardSessions} isLoading={isMetricsLoading} />
+      </section>
+
+      <section className="mt-8">
+        <ComplementaryVolumeCard summary={secondaryActivitySummary} isLoading={isMetricsLoading} />
       </section>
 
       <section className="mt-8">

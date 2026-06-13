@@ -186,7 +186,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
       </section>
 
       <section className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px]">
-        <div className="space-y-5">
+        <div className="order-2 space-y-5 lg:order-1">
           <Card>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -277,7 +277,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
           </Card>
         </div>
 
-        <aside className="space-y-5">
+        <aside className="order-1 space-y-5 lg:order-2">
           <RunningDataInsightCard analysis={dataAnalysis} isLoading={isMetricsLoading} />
 
           <Card>

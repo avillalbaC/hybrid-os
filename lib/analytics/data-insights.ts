@@ -44,6 +44,7 @@ export type DataInsight = {
   metric?: {
     label: string;
     value: string;
+    comparison?: string;
   };
 };
 
@@ -138,6 +139,10 @@ function formatPercent(value: number | null) {
 
 function formatRatio(value: number, total: number) {
   return `${percent(value, total)}%`;
+}
+
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values));
 }
 
 function metricChanged(metric: TrendMetric, threshold: number) {
@@ -288,8 +293,10 @@ function buildInsights(
   const topThreePercent = percent(topThreeLoad, metrics.muscleTotal);
   const hyroxSessions = getDisciplineCount(metrics.disciplineCounts, "hyrox");
   const crossfitSessions = getDisciplineCount(metrics.disciplineCounts, "crossfit");
+  const runningSessions = getDisciplineCount(metrics.disciplineCounts, "running");
   const strengthSessions = getDisciplineCount(metrics.disciplineCounts, "fuerza") + getDisciplineCount(metrics.disciplineCounts, "halterofilia");
   const mobilitySessions = getDisciplineCount(metrics.disciplineCounts, "movilidad");
+  const nonRunningTrainingSessions = metrics.sessions - runningSessions - metrics.secondarySummary.sessions;
 
   const addInsight = (insight: DataInsight) => insights.push(insight);
 
@@ -309,27 +316,31 @@ function buildInsights(
   }
 
   if (hasReference && trends.load.changePercent !== null && trends.load.changePercent >= 25) {
+    const isCriticalFatigueSpike = trends.load.changePercent >= 60 && (metrics.averageRpe ?? 0) >= 8 && metrics.impactScore >= 220;
+
     addInsight({
       id: "fatigue-spike",
       category: "load",
-      severity: trends.load.changePercent >= 45 || highRpeRatio >= 0.5 ? "critical" : "warning",
+      severity: isCriticalFatigueSpike ? "critical" : "warning",
       title: "Fatiga semanal en subida",
       message: "La carga interna sube por encima de la referencia reciente.",
       evidence: getTrendEvidence(trends.load, `${metrics.fatigueCost} pts de fatiga`),
-      recommendation: "Evitar sumar otra sesión dura hasta confirmar recuperación y molestias.",
+      recommendation: "Evitar otro estímulo duro si sueño, molestias o rigidez no están recuperados.",
       metric: { label: "Fatiga", value: `${metrics.fatigueCost}` },
     });
   }
 
   if (hasReference && trends.impact.changePercent !== null && trends.impact.changePercent >= 25) {
+    const isCriticalImpactSpike = trends.impact.changePercent >= 60 && metrics.impactScore >= 260 && highRpeRatio >= 0.5;
+
     addInsight({
       id: "impact-spike",
       category: "load",
-      severity: trends.impact.changePercent >= 45 ? "critical" : "warning",
+      severity: isCriticalImpactSpike ? "critical" : "warning",
       title: "Impacto por encima de referencia",
       message: "El impacto acumulado sube y puede condicionar carrera, gemelos y tren inferior.",
       evidence: getTrendEvidence(trends.impact, `${metrics.impactScore} pts de impacto`),
-      recommendation: "Priorizar bajo impacto o técnica si la próxima sesión mantiene intensidad.",
+      recommendation: "Priorizar bajo impacto si la próxima sesión mantiene intensidad.",
       metric: { label: "Impacto", value: `${metrics.impactScore}` },
     });
   }
@@ -347,6 +358,39 @@ function buildInsights(
       ],
       recommendation: "No interpretar la bajada de minutos como descarga completa si la intensidad sigue alta.",
       metric: { label: "RPE medio", value: formatRpe(metrics.averageRpe) },
+    });
+  }
+
+  if (!insights.some((insight) => insight.id === "low-volume-high-intensity") && metrics.durationMinutes > 0 && metrics.durationMinutes <= 120 && (metrics.averageRpe ?? 0) >= 8) {
+    addInsight({
+      id: "low-volume-high-intensity",
+      category: "intensity",
+      severity: "warning",
+      title: "Volumen bajo con intensidad alta",
+      message: "El periodo no acumula muchos minutos, pero la intensidad percibida es alta.",
+      evidence: [
+        `Duración: ${formatDuration(metrics.durationMinutes)}.`,
+        `RPE medio: ${formatRpe(metrics.averageRpe)}.`,
+      ],
+      recommendation: "No tratarlo como semana ligera si las sesiones fueron exigentes.",
+      metric: { label: "RPE medio", value: formatRpe(metrics.averageRpe) },
+    });
+  }
+
+  if (metrics.fatigueCost >= 160 && (metrics.averageRpe ?? 0) >= 8) {
+    addInsight({
+      id: "fatigue-high-rpe",
+      category: "load",
+      severity: metrics.fatigueCost >= 300 && metrics.impactScore >= 240 ? "critical" : "warning",
+      title: "Fatiga alta con RPE alto",
+      message: "La carga interna del periodo coincide con intensidad percibida elevada.",
+      evidence: [
+        `Fatiga: ${metrics.fatigueCost} pts.`,
+        `RPE medio: ${formatRpe(metrics.averageRpe)}.`,
+        `${metrics.highRpeSessions} sesiones con RPE 8 o más.`,
+      ],
+      recommendation: "Vigilar sueño, molestias y rigidez antes de añadir otra sesión dura.",
+      metric: { label: "Fatiga", value: `${metrics.fatigueCost}` },
     });
   }
 
@@ -381,14 +425,20 @@ function buildInsights(
   }
 
   if (hasReference && trends.runExposure.total.changePercent !== null && trends.runExposure.total.changePercent >= 25) {
+    const isCriticalRunSpike =
+      trends.runExposure.total.changePercent >= 80 &&
+      metrics.impactScore >= 260 &&
+      (metrics.averageRpe ?? 0) >= 8 &&
+      hasTopMuscle(metrics.topMuscles.slice(0, 5), "calves");
+
     addInsight({
       id: "run-exposure-spike",
       category: "running",
-      severity: trends.runExposure.total.changePercent >= 45 ? "critical" : "warning",
+      severity: isCriticalRunSpike ? "critical" : "warning",
       title: "Carrera total en subida brusca",
-      message: "La exposición total de carrera sube frente al bloque reciente.",
+      message: `La carrera total sube frente al bloque reciente: ${formatKm(totalRun, { forceKm: true })} esta semana.`,
       evidence: getTrendEvidence(trends.runExposure.total, formatKm(totalRun, { forceKm: true })),
-      recommendation: "No añadir intensidad de carrera hasta validar gemelos, sóleo y molestias de impacto.",
+      recommendation: "No añadir intensidad de carrera hasta revisar gemelos, sóleo y molestias de impacto.",
       metric: { label: "Carrera total", value: formatKm(totalRun, { forceKm: true }) },
     });
   }
@@ -401,10 +451,12 @@ function buildInsights(
       title: "Carrera sin running estructurado",
       message: "Toda la carrera registrada viene de sesiones mixtas, no de sesiones type running.",
       evidence: [
+        `${getDisciplineCount(metrics.disciplineCounts, "running")} sesiones running.`,
         `${formatKm(metrics.running.mixedMeters, { forceKm: true })} en sesiones mixtas.`,
         `${formatKm(metrics.running.structuredMeters, { forceKm: true })} en running estructurado.`,
+        `${formatRatio(metrics.running.mixedMeters, totalRun)} de la carrera viene de sesiones mixtas.`,
       ],
-      recommendation: "Separar una sesión suave o técnica si quieres controlar ritmos, zapatillas y progresión de carrera.",
+      recommendation: "Añadir una sesión Z2 o técnica si el objetivo sigue siendo mejorar ritmos.",
       metric: { label: "Running estructurado", value: formatKm(metrics.running.structuredMeters, { forceKm: true }) },
     });
   } else if (mixedRunRatio >= 0.6) {
@@ -469,7 +521,7 @@ function buildInsights(
     });
   }
 
-  if (metrics.muscleTotal > 0 && topThreePercent >= 45) {
+  if (metrics.muscleTotal >= 500 && topThreePercent >= 45) {
     addInsight({
       id: "muscle-concentration",
       category: "muscle",
@@ -484,7 +536,7 @@ function buildInsights(
     });
   }
 
-  if (lowerBody && upperBody && lowerBody.load > upperBody.load * 1.25) {
+  if (lowerBody && upperBody && nonRunningTrainingSessions > 0 && lowerBody.load > upperBody.load * 1.25) {
     addInsight({
       id: "lower-body-bias",
       category: "muscle",
@@ -526,7 +578,7 @@ function buildInsights(
         `Pádel: ${metrics.secondarySummary.kindCounts.padel} sesiones.`,
         `Top muscular: ${getMuscleNames(metrics.topMuscles.slice(0, 5))}.`,
       ],
-      recommendation: "Evitar cambios bruscos de dirección o zancadas pesadas si aparece tensión.",
+      recommendation: "Evitar cambios bruscos de dirección o zancadas pesadas si aparece tensión en aductores.",
     });
   }
 
@@ -582,6 +634,23 @@ function buildInsights(
     });
   }
 
+  if (strengthSessions >= 2 && metrics.externalLoadKg >= 6000 && totalRun < 1000) {
+    addInsight({
+      id: "strength-dominant-week",
+      category: "discipline",
+      severity: "positive",
+      title: "Semana orientada a fuerza",
+      message: "La carga externa domina el periodo y la carrera queda en segundo plano.",
+      evidence: [
+        `Fuerza/Halterofilia: ${strengthSessions} sesiones.`,
+        `Peso movido: ${formatLoadKg(metrics.externalLoadKg)}.`,
+        `Carrera total: ${formatKm(totalRun, { forceKm: true })}.`,
+      ],
+      recommendation: "Mantener un estímulo aeróbico suave si el bloque de fuerza se alarga más semanas.",
+      metric: { label: "Peso movido", value: formatLoadKg(metrics.externalLoadKg) },
+    });
+  }
+
   if (metrics.secondarySummary.sessions > 0 && metrics.secondarySummary.fatigueCost >= Math.max(70, metrics.fatigueCost * 0.25)) {
     addInsight({
       id: "secondary-fatigue",
@@ -594,6 +663,22 @@ function buildInsights(
         `${metrics.secondarySummary.fatigueCost} pts de fatiga secundaria.`,
       ],
       recommendation: "Contarlo como carga real antes de planificar otra sesión intensa.",
+    });
+  }
+
+  if (metrics.secondarySummary.kindCounts.padel > 0 && (metrics.secondarySummary.fatigueCost >= 70 || metrics.impactScore >= 120)) {
+    addInsight({
+      id: "padel-secondary-load",
+      category: "discipline",
+      severity: "info",
+      title: "Pádel como carga secundaria real",
+      message: "El pádel aporta fatiga e impacto, pero no se cuenta como running estructurado.",
+      evidence: [
+        `Pádel: ${metrics.secondarySummary.kindCounts.padel} sesiones.`,
+        `Fatiga secundaria: ${metrics.secondarySummary.fatigueCost} pts.`,
+        `Impacto total del periodo: ${metrics.impactScore} pts.`,
+      ],
+      recommendation: "Sumarlo al balance de recuperación aunque no aumente kilómetros de running.",
     });
   }
 
@@ -621,7 +706,7 @@ function buildInsights(
       title: "Sin recuperación explícita",
       message: "No hay movilidad registrada en un periodo con fatiga o intensidad relevantes.",
       evidence: [`Movilidad: ${mobilitySessions} sesiones.`, `Fatiga: ${metrics.fatigueCost}.`, `RPE medio: ${formatRpe(metrics.averageRpe)}.`],
-      recommendation: "Registrar o añadir trabajo suave de recuperación si existe rigidez.",
+      recommendation: "Añadir 10-20 min de movilidad o recuperación suave si existe rigidez.",
     });
   }
 
@@ -718,6 +803,7 @@ function buildSummary(
   const recommendations = insights
     .map((insight) => insight.recommendation)
     .filter((recommendation): recommendation is string => Boolean(recommendation))
+    .filter((recommendation, index, values) => values.indexOf(recommendation) === index)
     .slice(0, 4);
   const dominantDiscipline = getDominantDiscipline(metrics.disciplineCounts);
   const dominantLabel = dominantDiscipline
@@ -732,6 +818,13 @@ function buildSummary(
   if (metrics.sessions < 2 || activeWeeks < 3) {
     status = "insuficiente";
   } else if (warnings.some((insight) => insight.severity === "critical")) {
+    status = "alta_carga";
+  } else if (
+    warnings.some((insight) => insight.category === "load") &&
+    metrics.fatigueCost >= 240 &&
+    metrics.impactScore >= 220 &&
+    (metrics.averageRpe ?? 0) >= 8
+  ) {
     status = "alta_carga";
   } else if (warnings.length > 0) {
     status = "vigilar";
@@ -774,7 +867,7 @@ function buildSummary(
     topSignals: insights.slice(0, 3),
     warnings,
     positives,
-    recommendations,
+    recommendations: uniqueStrings(recommendations),
   };
 }
 

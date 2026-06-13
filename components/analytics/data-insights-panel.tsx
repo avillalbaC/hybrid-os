@@ -30,6 +30,18 @@ function getSectionInsights(analysis: TrainingDataInsightsResult, categories: Da
   return analysis.insights.filter((insight) => categories.includes(insight.category)).slice(0, limit);
 }
 
+function getRunningInsights(analysis: TrainingDataInsightsResult, limit = 3) {
+  const runningIds = new Set(["hyrox-without-structured-run", "running-shoes-missing"]);
+
+  return analysis.insights
+    .filter((insight) => insight.category === "running" || runningIds.has(insight.id))
+    .slice(0, limit);
+}
+
+function getMuscleInsights(analysis: TrainingDataInsightsResult, limit = 4) {
+  return analysis.insights.filter((insight) => insight.category === "muscle").slice(0, limit);
+}
+
 function InsightCard({ insight }: { insight: DataInsight }) {
   const isWarning = insight.severity === "warning" || insight.severity === "critical";
 
@@ -203,13 +215,14 @@ export function RunningDataInsightCard({
     return <AnalysisSkeleton compact />;
   }
 
-  const runningInsights = getSectionInsights(analysis, ["running", "discipline", "muscle"], 3);
+  const runningInsights = getRunningInsights(analysis, 3);
+  const runningSummary = runningInsights[0]?.message ?? "Sin señales específicas de carrera con los datos actuales.";
 
   return (
     <Card>
       <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Lectura de carrera</p>
       <h3 className="mt-3 text-xl font-black tracking-tight">{runningInsights[0]?.title ?? analysis.summary.headline}</h3>
-      <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">{analysis.summary.summary}</p>
+      <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">{runningSummary}</p>
       <div className="mt-4">
         <InsightList empty="Sin señales específicas de running con los datos actuales." insights={runningInsights} />
       </div>
@@ -228,7 +241,7 @@ export function MuscleDataInsightCard({
     return <AnalysisSkeleton compact />;
   }
 
-  const muscleInsights = getSectionInsights(analysis, ["muscle", "recovery", "data_quality"], 4);
+  const muscleInsights = getMuscleInsights(analysis, 4);
 
   return (
     <Card>

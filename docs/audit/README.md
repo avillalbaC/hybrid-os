@@ -9,6 +9,20 @@ Paquete de auditoria generado con Dev Auth Bypass local/Codex. No incluye secret
 - [Visual State](./visual-state.md)
 - [Data and Metrics State](./data-metrics-state.md)
 - [Sample Payloads](./sample-payloads.md)
+- [Analysis Layer Review](./analysis-layer-review.md)
+- [Analysis Examples](./analysis-examples.md)
+
+## Capturas post-analysis
+
+- [Home analysis desktop](./screenshots/post-analysis/home-analysis-desktop.png)
+- [Dashboard analysis desktop](./screenshots/post-analysis/dashboard-analysis-desktop.png)
+- [Dashboard reports desktop](./screenshots/post-analysis/dashboard-reports-desktop.png)
+- [Running analysis desktop](./screenshots/post-analysis/running-analysis-desktop.png)
+- [Muscle Load analysis desktop](./screenshots/post-analysis/muscle-load-analysis-desktop.png)
+- [Home analysis mobile](./screenshots/post-analysis/home-analysis-mobile.png)
+- [Dashboard analysis mobile](./screenshots/post-analysis/dashboard-analysis-mobile.png)
+- [Running analysis mobile](./screenshots/post-analysis/running-analysis-mobile.png)
+- [Muscle Load analysis mobile](./screenshots/post-analysis/muscle-load-analysis-mobile.png)
 
 ## Capturas desktop
 
