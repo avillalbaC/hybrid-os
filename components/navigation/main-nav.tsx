@@ -9,6 +9,7 @@ const navSections = [
     items: [
       { href: "/", label: "Home", marker: "O" },
       { href: "/dashboard", label: "Dashboard", marker: "A" },
+      { href: "/analysis", label: "Análisis", marker: "A" },
     ],
   },
   {

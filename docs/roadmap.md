@@ -29,17 +29,82 @@ Este roadmap refleja la direccion actual del proyecto. Mantiene el foco en datos
 - RLS activo.
 - APIs privadas protegidas.
 - Importador funcionando con `user_id`.
+- Dashboard decision refactor + ruta `/analysis`: Home queda corto, Dashboard decide el periodo y Analysis concentra informes/tendencias/calidad de datos.
+- Post-refactor polish: mobile tabs, copy de decision, warnings con accion y quality actions.
+- Visual Analytics layer: graficos ligeros reutilizables, datasets normalizados y visualizacion en Dashboard, Analysis, Running, Muscle Load y Home.
+- Visual Analytics polish: cards con valor actual/referencia/estado, tendencias mejor agrupadas, calidad de datos con impacto y preparacion documental para objetivos activos.
 
 ## Siguiente roadmap
 
 Orden actual:
 
-1. Feedback importador + dry-run.
-2. Loading states globales.
-3. v1.1 zapatillas running.
-4. Volumen por zapatilla.
-5. Responsive/mobile audit.
-6. PWA basica mas adelante.
+1. Objetivos activos.
+2. Body map asset-based.
+3. Body/Nutrition Supabase.
+4. Feedback loop de recomendaciones.
+5. QA/calibracion continua de Visual Analytics con datos reales.
+6. Feedback importador + dry-run.
+7. Loading states globales.
+8. v1.1 zapatillas running.
+9. Volumen por zapatilla.
+10. Responsive/mobile audit.
+11. PWA basica mas adelante.
+
+## Iteracion reciente - Visual Analytics layer
+
+Estado: completada primera iteracion + polish.
+
+Alcance:
+
+- Componentes reutilizables en `components/charts`.
+- Datasets normalizados en `lib/analytics/chart-data.ts`.
+- Dashboard con panel `Evolucion clave`.
+- Analysis mas visual en tabs Actual, Semanas, Meses, Tendencias y Calidad de datos.
+- Running con carrera por semana, running estructurado, ritmo medio y zapatillas.
+- Muscle Load con top musculos, ratios y sesiones clave mas visuales.
+- Home con mini sparklines sin hacerla pesada.
+- Sin nuevas dependencias de produccion.
+- Sin cambios de schema, Auth/RLS/user_id, contratos JSON ni importador.
+
+Pulido posterior:
+
+- `ChartCard` acepta valor actual, estado, referencias compactas, footer, empty state y modo compacto.
+- Dashboard mantiene cuatro graficos clave con valor actual, media/cambio y estado.
+- Analysis Tendencias queda agrupado por bloques con descripcion y ancho razonable cuando hay pocas cards.
+- Running explicita que la carrera mixta cuenta como impacto, no como running tecnico.
+- Muscle Load deja slot discreto para BodyMap futuro sin implementarlo.
+- Calidad de datos muestra acciones priorizadas e impacto de datos faltantes.
+- Documentada futura integracion con active goals.
+
+Siguiente paso sugerido:
+
+1. Objetivos activos.
+2. Mapa corporal asset-based.
+3. Body/Nutrition Supabase.
+4. Feedback loop de recomendaciones.
+
+## Iteracion reciente - Dashboard decision refactor + Analysis route
+
+Estado: completada a nivel de producto base.
+
+Alcance:
+
+- Nueva ruta `/analysis`.
+- Navegacion principal con entrada `Analisis`.
+- Dashboard reducido a centro de decision del periodo.
+- Home reducido a estado diario rapido.
+- Informes semanales/mensuales movidos fuera del Dashboard largo.
+- Tendencias completas agrupadas en Analysis.
+- Calidad de datos movida a Analysis.
+- Running y Muscle Load mantienen foco especializado y enlazan a Analysis para profundidad global.
+- Pulido posterior: Analysis mobile usa tabs en grid, badges tecnicos se sustituyen por copy de producto, Dashboard muestra decision con accion/por que/priorizar/evitar y Calidad de datos propone maximo 3 acciones.
+
+Siguiente paso sugerido:
+
+1. QA/calibracion final de Visual Analytics con datos reales.
+2. Objetivos activos.
+3. Mapa corporal asset-based.
+4. Body/Nutrition Supabase.
 
 ## 1 - Feedback importador + dry-run
 

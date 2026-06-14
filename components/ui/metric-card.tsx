@@ -1,4 +1,5 @@
 import { SkeletonBlock } from "@/components/ui/skeleton";
+import { MetricSparkline } from "@/components/charts/metric-sparkline";
 
 type MetricComparisonDisplay = {
   expectedLabel: string;
@@ -25,6 +26,8 @@ export function MetricCard({
   tone = "default",
   state = "ready",
   emptyLabel = "Sin datos del periodo",
+  sparklineData,
+  sparklineLabel,
 }: {
   label: string;
   value: string;
@@ -37,6 +40,8 @@ export function MetricCard({
   tone?: "default" | "strong";
   state?: "loading" | "ready" | "empty";
   emptyLabel?: string;
+  sparklineData?: number[];
+  sparklineLabel?: string;
 }) {
   const getDeltaClassName = (value: "positive" | "negative" | "neutral") => ({
     positive: "border-[var(--accent-secondary-border)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary-text)]",
@@ -113,6 +118,11 @@ export function MetricCard({
         <p className={`mt-4 inline-flex rounded-md border px-2.5 py-1.5 font-mono text-xs font-black ${getDeltaClassName(deltaTone)}`}>
           {delta}
         </p>
+      ) : null}
+      {state === "ready" && !comparison && sparklineData && sparklineData.length > 1 ? (
+        <div className="mt-4 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-2">
+          <MetricSparkline ariaLabel={sparklineLabel ?? `${label}: evolución reciente`} values={sparklineData} />
+        </div>
       ) : null}
       {state === "ready" && !comparison && secondaryDelta ? (
         <p className={`mt-2 inline-flex rounded-md border px-2.5 py-1.5 font-mono text-[0.68rem] font-bold ${getDeltaClassName(secondaryDeltaTone)}`}>

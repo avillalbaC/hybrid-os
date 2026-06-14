@@ -1,6 +1,6 @@
 # Hybrid OS - Current State
 
-Snapshot: 2026-06-03
+Snapshot: 2026-06-14
 
 Este documento describe el estado real del proyecto en este snapshot. No debe usarse para guardar metricas que cambian cada dia, salvo que se marquen explicitamente como snapshot.
 
@@ -89,8 +89,9 @@ Politica vigente:
 
 ### UI
 
-- `/`: Home ejecutiva con resumen y carga muscular.
-- `/dashboard`: Dashboard por periodos.
+- `/`: Home ejecutiva corta para estado actual, ultimo entrenamiento, analisis rapido, vigilancia y accesos.
+- `/dashboard`: Centro de decision del periodo actual.
+- `/analysis`: Analisis profundo con lectura actual, informes, tendencias y calidad de datos.
 - `/training`: Training Log.
 - `/training/[id]`: detalle de entrenamiento.
 - `/training/weekly`: vista semanal.
@@ -160,8 +161,41 @@ Reglas que deben preservarse:
 - Persistencia en Supabase de sesiones, raw imports, ejercicios, body checks y nutrition checks.
 - Endpoint dedicado para Dashboard.
 - Dashboard con periodos calendarizados y metricas agregadas.
+- Dashboard decision refactor: KPIs principales, lectura del periodo, riesgos, decision recomendada, tendencias clave y preview de informes.
+- Ruta `/analysis` para informes semanales/mensuales, tendencias completas, evidencias y calidad de datos.
+- Post-refactor polish: tabs mobile de Analysis sin scrollbar nativa, copy de decision mas accionable y acciones priorizadas de calidad de datos.
+- Capa Visual Analytics: componentes reutilizables en `components/charts`, datasets en `lib/analytics/chart-data.ts` y graficos ligeros en Dashboard, Analysis, Running, Muscle Load y Home.
 - Training Log, detalle, weekly, running y muscle load funcionales sobre la capa actual de sesiones.
 - BodyHeatmap actual simplificado: ranking, barras y placeholder visual en vez de muneco generado por codigo.
+
+## Reparto de responsabilidades UI
+
+- Home: centro de mando diario rapido. Debe responder que esta pasando ahora, cual fue el ultimo entrenamiento, que senales vigilar y a donde ir.
+- Dashboard: centro de decision del periodo actual. Debe priorizar KPIs, lectura ejecutiva, riesgos principales, una decision recomendada, tendencias clave y previews.
+- Analysis: vista profunda. Contiene analisis completo, informes semanales y mensuales, tendencias completas agrupadas y calidad de datos.
+- Running: analisis especifico de carrera. No debe repetir lectura global salvo enlace a Analysis.
+- Muscle Load: analisis especifico de carga muscular. No debe repetir informes ni lectura global salvo enlace a Analysis.
+
+## Visual Analytics
+
+Estado: primera capa implementada y pulida para decision.
+
+- No se ha anadido libreria de charts. Los graficos usan componentes propios con CSS/SVG ligero.
+- `lib/analytics/chart-data.ts` normaliza datos semanales, mensuales, distribucion por disciplina, exposicion de carrera, ranking muscular y calidad de datos.
+- `components/charts/*` contiene tarjetas, barras semanales, barras apiladas de carrera, rankings horizontales, sparklines y barras de calidad.
+- Dashboard incorpora `Evolucion clave` con carrera estructurada/mixta, duracion, fatiga y peso movido.
+- Analysis incorpora graficos en Actual, Semanas, Meses, Tendencias y Calidad de datos.
+- Running incorpora carrera por semana, running estructurado, ritmo medio y zapatillas.
+- Muscle Load refuerza top musculos, ratios y sesiones clave sin implementar mapa corporal.
+- Home mantiene solo mini sparklines en KPIs del hero para no convertirse en dashboard.
+- `ChartCard` soporta valor actual, referencia compacta, estado, empty state y modo compacto.
+- Las cards visuales importantes muestran unidad, valor actual, media/cambio cuando existe y un insight corto.
+- Calidad de datos muestra acciones priorizadas e impacto de cada falta relevante.
+
+Regla de producto:
+
+- Los insights explican los graficos; no sustituyen a los graficos.
+- Los graficos deben estar preparados para recibir objetivos activos en una fase posterior, sin implementarlos todavia.
 
 ## Pendiente
 
@@ -169,6 +203,7 @@ Reglas que deben preservarse:
 - Anadir loading states globales y consistentes en pantallas prioritarias.
 - Implementar `HybridOSAppInput` v1.1 enfocado primero en zapatillas running.
 - Preparar volumen por zapatilla.
+- QA/calibracion final de la nueva separacion Home / Dashboard / Analysis con uso real.
 - Hacer auditoria responsive/mobile de pantallas prioritarias.
 - Conectar `/body` y `/nutrition` a Supabase como siguiente bloque no prioritario de training.
 - Conectar `/goals` a datos reales.

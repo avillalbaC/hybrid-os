@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { MuscleDataInsightCard } from "@/components/analytics/data-insights-panel";
+import { ChartCard } from "@/components/charts/chart-card";
+import { HorizontalRankingChart } from "@/components/charts/horizontal-ranking-chart";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -399,7 +401,7 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
       <section className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap gap-2">
           <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
-            {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
+            {source === "remote" ? "Datos reales" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
           </Badge>
           {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
           <Badge>{getPeriodDetail(period)}</Badge>
@@ -443,6 +445,41 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
 
       <section className="mt-6">
         <MuscleDataInsightCard analysis={dataAnalysis} isLoading={isMetricsLoading} />
+      </section>
+
+      <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <ChartCard
+          title="Top músculos"
+          description="Carga acumulada del periodo por grupo muscular."
+          unit="pts"
+          compact
+          currentValue={ranking[0] ? `${formatMuscleName(ranking[0].muscle)} ${ranking[0].load}` : undefined}
+          meta={[
+            { label: "Carga total", value: `${totalLoad}` },
+            { label: "Sesiones", value: `${analysisSessions.length}` },
+          ]}
+          isLoading={isMetricsLoading}
+          footer="Color e intensidad representan porcentaje relativo al músculo más cargado."
+        >
+          <HorizontalRankingChart
+            emptyLabel="Sin carga muscular en el periodo"
+            formatter={(value) => `${Math.round(value)} pts`}
+            items={ranking.slice(0, 8).map((item) => ({
+              key: item.muscle,
+              label: formatMuscleName(item.muscle),
+              value: item.load,
+              percentage: item.percentOfMax,
+            }))}
+          />
+        </ChartCard>
+        <Card className="p-4">
+          <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Mapa corporal</p>
+          <h3 className="mt-2 text-xl font-black tracking-tight">Futura sección superior</h3>
+          <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+            El mapa corporal queda pendiente para la fase asset-based. De momento, el ranking y los ratios son la fuente visual principal.
+          </p>
+          {/* Future BodyMap slot: keep data fed by muscleSummary/ranking, not by ad hoc anatomy code. */}
+        </Card>
       </section>
 
       {isMetricsLoading ? (
@@ -580,11 +617,19 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
                           <p className="mt-2 text-sm text-[var(--muted-strong)]">Principal: {joinMuscleNames(item.topMuscles)}.</p>
                           <p className="mt-3 text-sm font-bold text-[var(--accent)]">Ver sesión →</p>
                         </div>
-                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                        <div className="min-w-0 lg:w-80">
                           <Badge tone="accent">{item.load} puntos</Badge>
-                          {item.topMuscles.map((muscle) => (
-                            <Badge key={muscle.muscle}>{formatMuscleName(muscle.muscle)} · {muscle.load}</Badge>
-                          ))}
+                          <div className="mt-3 space-y-2">
+                            {item.topMuscles.map((muscle) => (
+                              <div key={muscle.muscle}>
+                                <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+                                  <span className="truncate text-[var(--muted)]">{formatMuscleName(muscle.muscle)}</span>
+                                  <span className="font-mono font-bold text-[var(--accent-strong)]">{muscle.load}</span>
+                                </div>
+                                <ProgressBar value={muscle.percentOfMax} />
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </Link>

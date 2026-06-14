@@ -14,16 +14,22 @@ Documento operativo para mantener la capa de analisis determinista. No describe 
    - ejemplo: carrera total sube, pero gran parte viene de sesiones mixtas.
 4. Informes: conclusion de periodo.
    - resumen semanal o mensual generado dinamicamente desde sesiones.
+5. Visualizaciones: graficos ligeros que muestran los datos antes de la explicacion.
+   - los insights explican los graficos; no sustituyen graficos.
+   - cada grafico importante debe mostrar unidad, valor actual y referencia compacta cuando exista.
 
 Las tendencias no sustituyen a informes. Los informes usan metricas + tendencias + insights.
 
 ## Archivos principales
 
 - `lib/analytics/data-insights.ts`: motor determinista de insights.
+- `lib/analytics/insight-surface.ts`: distribucion de insights por superficie.
 - `lib/analytics/trends.ts`: buckets y tendencias semanales.
 - `lib/analytics/period-reports.ts`: informes semanales/mensuales.
 - `components/analytics/data-insights-panel.tsx`: UI de Home, Dashboard, Running y Muscle Load.
 - `components/analysis/*`: cards/listas de informes.
+- `components/charts/*`: capa visual reutilizable para barras, rankings, sparklines y calidad de datos.
+- `lib/analytics/chart-data.ts`: datasets visuales derivados de sesiones, trends, running exposure y muscle load.
 - `lib/analytics/__fixtures__/analysis-fixtures.ts`: fixtures manuales sin framework.
 - `lib/analytics/analysis-debug.ts`: helper para revisar outputs de fixtures.
 
@@ -45,6 +51,7 @@ Las tendencias no sustituyen a informes. Los informes usan metricas + tendencias
 - `positive`: senal favorable real, no motivacion vacia.
 - `warning`: accionable; requiere revisar la siguiente decision.
 - `critical`: raro; solo combinaciones claras de carga, impacto, RPE o subida extrema.
+- Todo warning visible debe incluir evidencia concreta y una accion siguiente; evitar copy alarmista sin contexto.
 
 ## Thresholds actuales
 
@@ -84,27 +91,51 @@ Las tendencias no sustituyen a informes. Los informes usan metricas + tendencias
 Home:
 
 - 1 headline.
-- Maximo 3 senales.
+- Maximo 2-3 senales.
 - Maximo 1 accion.
 - No informes ni listas largas.
 
 Dashboard:
 
+- Centro de decision del periodo actual.
+- KPIs principales: sesiones, carrera total, duracion, RPE medio y fatiga/carga.
+- Debe mostrar graficos clave del periodo: carrera, duracion, fatiga y peso movido.
+- Cada grafico clave debe incluir valor actual, media/cambio o estado si la tendencia existe.
+- Lectura del periodo con maximo 3 evidencias.
+- Maximo 2-3 riesgos principales.
+- Una decision recomendada con accion principal, por que, priorizar y evitar.
+- Tendencias clave, no todas.
+- Preview de informes, no informes largos completos.
+- Enlace claro a Analysis para profundidad.
+
+Analysis:
+
 - Analisis completo.
-- Warnings, positives y recomendaciones.
-- Tendencias.
-- Informes semanales/mensuales.
-- Calidad de datos.
+- Debe priorizar graficos y usar insights como interpretacion de esos datos.
+- Todos los insights agrupados.
+- Informes semanales y mensuales colapsados por defecto.
+- Tendencias completas agrupadas por volumen, carrera, carga, fuerza, intensidad y muscular.
+- Cada bloque de tendencias debe tener descripcion corta y evitar cards solitarias estiradas innecesariamente.
+- Calidad de datos historica e informativa.
+- Calidad de datos debe proponer maximo 3 acciones priorizadas; no pedir completar todo el historico.
+- Calidad de datos debe explicar el impacto de cada falta principal: resultado, RPE, duracion, partial y zapatillas.
+- No persiste informes ni toca Supabase.
 
 Running:
 
 - Solo carrera: exposicion total, running estructurado, carrera mixta, HYROX sin running estructurado y zapatillas.
+- Debe mostrar carrera por semana y separar visualmente running estructurado de carrera mixta.
+- Debe explicar que la carrera mixta cuenta como impacto, pero no como running tecnico.
 - No mostrar core/lumbar, partial o recovery dentro de `Lectura de carrera`.
+- Puede enlazar a Analysis para ver contexto global.
 
 Muscle Load:
 
 - Solo musculo: dominantes, desbalances, gemelos, aductores, core/lumbar, empuje/traccion.
+- Debe mostrar barras de top musculos, ratios principales y sesiones clave con mini barras.
+- Puede reservar un slot discreto para BodyMap futuro, sin implementar mapa corporal hasta tener asset real.
 - No mostrar calidad de datos ni recovery en `Lectura muscular avanzada`.
+- Puede enlazar a Analysis para ver contexto global.
 
 Informes:
 

@@ -3,21 +3,17 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { QuickDataInsightCard } from "@/components/analytics/data-insights-panel";
-import { TrainingMixCard } from "@/components/home/training-mix-card";
-import { QuickTrendsCard } from "@/components/dashboard/trends-section";
+import { MetricSparkline } from "@/components/charts/metric-sparkline";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { MetricCard } from "@/components/ui/metric-card";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
 import { getTrainingDataInsights } from "@/lib/analytics/data-insights";
-import { getWeeklyTrendMetrics } from "@/lib/analytics/trends";
-import { calculateDashboardMetrics, type DashboardMetric } from "@/lib/domain/dashboard/metrics";
+import { getWeeklyChartData } from "@/lib/analytics/chart-data";
+import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
 import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
-import { getSessionRunMeters, getTotalRunExposureMeters, type RunningBreakdown } from "@/lib/domain/training/run-exposure";
-import { secondaryActivityKindLabels, summarizeSecondaryActivities, type SecondaryActivitySummary } from "@/lib/domain/training/secondary-activity";
-import { calculateTrainingMix, type TrainingModality } from "@/lib/domain/training/training-mix";
+import { getSessionRunMeters, getTotalRunExposureMeters } from "@/lib/domain/training/run-exposure";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
-import { formatDataQuality, formatDate, formatDuration, formatKm, formatMuscleName, formatRpe, formatTrainingType } from "@/lib/utils/format";
+import { formatDataQuality, formatDate, formatDuration, formatKm, formatRpe, formatTrainingType } from "@/lib/utils/format";
 import type { BodyCheck } from "@/types/body";
 import type { NutritionCheck } from "@/types/nutrition";
 import type { MuscleName, TrainingSession } from "@/types/training";
@@ -36,8 +32,6 @@ type NextAction = {
   tone: "accent" | "warning";
 };
 
-const miniMixOrder: TrainingModality[] = ["hyrox", "crossfit", "running", "halterofilia", "gimnasticos"];
-
 const quickLinks = [
   { href: "/training/import", label: "Importar entrenamiento", detail: "Añadir nueva sesión" },
   { href: "/training", label: "Ver log", detail: "Historial y filtros" },
@@ -45,23 +39,6 @@ const quickLinks = [
   { href: "/muscle-load", label: "Carga muscular", detail: "Top músculos y patrones" },
   { href: "/dashboard", label: "Dashboard", detail: "Análisis completo por periodo" },
 ];
-
-function MetricLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className="block rounded-md outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
-    >
-      {children}
-    </Link>
-  );
-}
 
 function PrimaryAction({
   href,
@@ -107,64 +84,6 @@ function getHardSessions(sessions: TrainingSession[]) {
 
 function getWeeklyFatigue(sessions: TrainingSession[]) {
   return sessions.reduce((total, session) => total + session.sessionMetrics.fatigueCost, 0);
-}
-
-function formatRunningBreakdown(breakdown: RunningBreakdown) {
-  return `${formatKm(breakdown.structuredMeters, { forceKm: true })} running · ${formatKm(breakdown.mixedMeters, { forceKm: true })} mixto`;
-}
-
-function getHomeStatusLabel(metric: DashboardMetric) {
-  const status = metric.comparisonDisplay?.badgeLabel ?? metric.deltaLabel;
-
-  if (status.includes("Por encima")) {
-    return "Sobre ritmo";
-  }
-
-  if (status.includes("Por debajo")) {
-    return "Bajo ritmo";
-  }
-
-  if (status.includes("Referencia") || status.includes("Sin referencia")) {
-    return "Histórico insuficiente";
-  }
-
-  if (status.includes("Histórico completo")) {
-    return "Histórico completo";
-  }
-
-  return "En ritmo";
-}
-
-function getHomeStatusTone(metric: DashboardMetric) {
-  return metric.comparisonDisplay?.badgeTone ?? metric.deltaTone;
-}
-
-function getExpectedContext(metric: DashboardMetric) {
-  const comparison = metric.comparisonDisplay;
-
-  if (!comparison?.expectedValue) {
-    return undefined;
-  }
-
-  return `${comparison.expectedLabel}: ${comparison.expectedValue}`;
-}
-
-function getExpectedDeltaContext(metric: DashboardMetric) {
-  const comparison = metric.comparisonDisplay;
-
-  if (!comparison?.deltaVsExpectedLabel) {
-    return undefined;
-  }
-
-  return `${comparison.deltaVsExpectedLabel} vs esperado`;
-}
-
-function getRpeStatus(rpe: number | null) {
-  if (rpe === null) {
-    return "Sin dato suficiente";
-  }
-
-  return rpe >= 8 ? "Alto" : "Normal";
 }
 
 function getWeeklyReading({
@@ -432,46 +351,6 @@ function NextActionCard({
   );
 }
 
-function MuscleSummaryCard({
-  isLoading,
-  muscles,
-}: {
-  isLoading?: boolean;
-  muscles: { muscle: MuscleName; loadScore: number }[];
-}) {
-  return (
-    <Card>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Carga muscular resumida</p>
-          <h3 className="mt-2 text-xl font-black tracking-tight">Top semanal</h3>
-        </div>
-        <Link href="/muscle-load" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
-          Ver análisis muscular
-        </Link>
-      </div>
-      <div className="mt-4 space-y-2">
-        {isLoading ? (
-          <>
-            <SkeletonBlock className="h-10 w-full" />
-            <SkeletonBlock className="h-10 w-full" />
-            <SkeletonBlock className="h-10 w-full" />
-          </>
-        ) : muscles.length > 0 ? (
-          muscles.map((item) => (
-            <div key={item.muscle} className="flex items-center justify-between rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-3 py-2 text-sm">
-              <span className="font-semibold text-[var(--foreground)]">{formatMuscleName(item.muscle)}</span>
-              <span className="font-mono font-black text-[var(--accent-strong)]">{item.loadScore}</span>
-            </div>
-          ))
-        ) : (
-          <p className="text-sm leading-6 text-[var(--muted)]">Sin datos del periodo.</p>
-        )}
-      </div>
-    </Card>
-  );
-}
-
 function HeroMetricValue({
   isLoading,
   isEmpty,
@@ -490,52 +369,6 @@ function HeroMetricValue({
   }
 
   return <p className="mt-2 whitespace-nowrap font-mono text-2xl font-black">{value}</p>;
-}
-
-function SecondaryActivityCard({
-  isLoading,
-  summary,
-}: {
-  isLoading?: boolean;
-  summary: SecondaryActivitySummary;
-}) {
-  const topKinds = summary.topKinds.slice(0, 3).map((kind) => secondaryActivityKindLabels[kind]).join(" · ");
-
-  return (
-    <Card>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Actividad secundaria</p>
-          <h3 className="mt-2 text-xl font-black tracking-tight">Complemento semanal</h3>
-        </div>
-        <Link href="/training?filter=secondary" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
-          Ver log
-        </Link>
-      </div>
-      {isLoading ? (
-        <div className="mt-4 space-y-3" aria-label="Actividad secundaria calculando">
-          <SkeletonBlock className="h-10 w-full" />
-          <SkeletonBlock className="h-10 w-full" />
-        </div>
-      ) : summary.sessions > 0 ? (
-        <>
-          <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
-            <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
-              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Sesiones</dt>
-              <dd className="mt-1 font-mono text-lg font-black">{summary.sessions}</dd>
-            </div>
-            <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
-              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Duración</dt>
-              <dd className="mt-1 font-mono text-lg font-black">{formatDuration(summary.durationMinutes)}</dd>
-            </div>
-          </dl>
-          <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">{topKinds || "Sin tipo dominante"}</p>
-        </>
-      ) : (
-        <p className="mt-4 text-sm leading-6 text-[var(--muted)]">Sin actividad secundaria esta semana.</p>
-      )}
-    </Card>
-  );
 }
 
 function QuickLinksCard() {
@@ -570,15 +403,9 @@ export function HomeView({
   const { sessions: combinedSessions, pendingSessions, source, syncMessage, isLoading, isReady } = useTrainingSessions(sessions);
   const metrics = calculateDashboardMetrics(combinedSessions, bodyChecks, nutritionChecks, "week");
   const dataAnalysis = useMemo(() => getTrainingDataInsights(combinedSessions, { period: "week" }), [combinedSessions]);
-  const trends = useMemo(() => getWeeklyTrendMetrics(combinedSessions), [combinedSessions]);
+  const weeklyChartData = useMemo(() => getWeeklyChartData(combinedSessions).slice(-8), [combinedSessions]);
   const { currentWeekSessions } = useMemo(() => getLatestWeekSessions(combinedSessions), [combinedSessions]);
-  const secondaryActivitySummary = useMemo(() => summarizeSecondaryActivities(currentWeekSessions), [currentWeekSessions]);
-  const trainingMix = useMemo(() => calculateTrainingMix(combinedSessions), [combinedSessions]);
   const latestSession = metrics.recentSessions[0] ?? null;
-  const miniMixRows = miniMixOrder
-    .map((modality) => trainingMix.find((row) => row.modality === modality))
-    .filter((row): row is NonNullable<typeof row> => Boolean(row));
-  const visibleMuscles = metrics.topMuscles.slice(0, 5);
   const shouldersLoad = currentWeekSessions.reduce((total, session) => total + getMuscleLoad(session, "shoulders"), 0);
   const calvesLoad = currentWeekSessions.reduce((total, session) => total + getMuscleLoad(session, "calves"), 0);
   const watchSignals = getWatchSignals({
@@ -600,10 +427,6 @@ export function HomeView({
   });
   const isMetricsLoading = isLoading || !isReady;
   const hasWeekSessions = (metrics.sessions.value ?? 0) > 0;
-  const sessionsState = isMetricsLoading ? "loading" : "ready";
-  const runningState = isMetricsLoading ? "loading" : "ready";
-  const durationState = isMetricsLoading ? "loading" : "ready";
-  const rpeState = isMetricsLoading ? "loading" : metrics.averageRpe.value !== null ? "ready" : "empty";
   const weeklyReadingText = isMetricsLoading
     ? "Calculando métricas semanales con la fuente final de entrenamiento."
     : weeklyReading;
@@ -624,20 +447,23 @@ export function HomeView({
               <div className="rounded-md border border-[rgba(244,247,244,0.12)] bg-[rgba(244,247,244,0.035)] p-3">
                 <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Sesiones</p>
                 <HeroMetricValue isLoading={isMetricsLoading} isEmpty={!hasWeekSessions} value={metrics.sessions.formattedValue} />
+                {!isMetricsLoading ? <MetricSparkline ariaLabel="Sesiones: evolución reciente" className="mt-2" values={weeklyChartData.map((week) => week.sessions)} /> : null}
               </div>
               <div className="rounded-md border border-[rgba(244,247,244,0.12)] bg-[rgba(244,247,244,0.035)] p-3">
                 <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Carrera total</p>
                 <HeroMetricValue isLoading={isMetricsLoading} isEmpty={(metrics.runningKm.value ?? 0) <= 0} value={metrics.runningKm.formattedValue} />
+                {!isMetricsLoading ? <MetricSparkline ariaLabel="Carrera total: evolución reciente" className="mt-2" values={weeklyChartData.map((week) => week.totalRunMeters)} /> : null}
               </div>
               <div className="rounded-md border border-[rgba(244,247,244,0.12)] bg-[rgba(244,247,244,0.035)] p-3">
                 <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">RPE</p>
                 <HeroMetricValue isLoading={isMetricsLoading} isEmpty={metrics.averageRpe.value === null} value={metrics.averageRpe.formattedValue} />
+                {!isMetricsLoading ? <MetricSparkline ariaLabel="RPE: evolución reciente" className="mt-2" values={weeklyChartData.map((week) => week.averageRpe ?? 0)} /> : null}
               </div>
             </div>
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
             <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
-              {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
+              {source === "remote" ? "Datos reales" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
             </Badge>
             <Badge>{metrics.periodDetail}</Badge>
             {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
@@ -668,57 +494,24 @@ export function HomeView({
       ) : null}
 
       <div className="flex flex-col gap-6">
-        <section className="order-2 grid gap-4 sm:grid-cols-2 xl:grid-cols-4 lg:order-1">
-          <MetricLink href="/training/weekly">
-            <MetricCard
-              label="Sesiones semana"
-              value={metrics.sessions.formattedValue}
-              detail={getExpectedContext(metrics.sessions) ?? "Estado semanal"}
-              delta={getHomeStatusLabel(metrics.sessions)}
-              deltaTone={getHomeStatusTone(metrics.sessions)}
-              tone="strong"
-              state={sessionsState}
-            />
-          </MetricLink>
-          <MetricLink href="/training/running">
-            <MetricCard
-              label="Carrera total"
-              value={metrics.runningKm.formattedValue}
-              detail={formatRunningBreakdown(metrics.runningBreakdown)}
-              delta={getHomeStatusLabel(metrics.runningKm)}
-              deltaTone={getHomeStatusTone(metrics.runningKm)}
-              secondaryDelta={getExpectedDeltaContext(metrics.runningKm)}
-              secondaryDeltaTone={getHomeStatusTone(metrics.runningKm)}
-              tone="strong"
-              state={runningState}
-            />
-          </MetricLink>
-          <MetricLink href="/dashboard">
-            <MetricCard
-              label="Duración"
-              value={metrics.durationMinutes.formattedValue}
-              detail={getExpectedDeltaContext(metrics.durationMinutes) ?? "Carga de la semana"}
-              delta={getHomeStatusLabel(metrics.durationMinutes)}
-              deltaTone={getHomeStatusTone(metrics.durationMinutes)}
-              state={durationState}
-            />
-          </MetricLink>
-          <MetricLink href="/dashboard">
-            <MetricCard label="RPE medio" value={metrics.averageRpe.formattedValue} detail="Intensidad percibida" delta={getRpeStatus(metrics.averageRpe.value)} deltaTone={metrics.averageRpe.value !== null && metrics.averageRpe.value >= 8 ? "negative" : "neutral"} state={rpeState} />
-          </MetricLink>
-        </section>
-
-        <section className="order-1 grid gap-5 lg:order-2 lg:grid-cols-3">
+        <section className="grid gap-5 lg:grid-cols-3">
           <QuickDataInsightCard analysis={dataAnalysis} isLoading={isMetricsLoading} />
           <WatchCard signals={watchSignals} isLoading={isMetricsLoading} />
           <NextActionCard action={nextAction} isLoading={isMetricsLoading} />
         </section>
 
-        <section className="order-3 grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.8fr)_320px]">
-          <TrainingMixCard rows={miniMixRows} density="compact" actionHref="/dashboard" actionLabel="Ver dashboard" state={isMetricsLoading ? "loading" : miniMixRows.length > 0 ? "ready" : "empty"} />
-          <QuickTrendsCard trends={trends} isLoading={isMetricsLoading} />
-          <MuscleSummaryCard muscles={visibleMuscles} isLoading={isMetricsLoading} />
-          <SecondaryActivityCard summary={secondaryActivitySummary} isLoading={isMetricsLoading} />
+        <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <Card>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Acceso principal</p>
+            <h3 className="mt-2 text-xl font-black tracking-tight">Siguiente vista</h3>
+            <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+              Dashboard decide el periodo actual. Análisis guarda informes, tendencias y calidad de datos.
+            </p>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <PrimaryAction href="/dashboard">Ver dashboard</PrimaryAction>
+              <SecondaryAction href="/analysis">Ver análisis</SecondaryAction>
+            </div>
+          </Card>
           <QuickLinksCard />
         </section>
       </div>

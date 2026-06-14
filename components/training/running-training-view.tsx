@@ -3,12 +3,17 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { RunningDataInsightCard } from "@/components/analytics/data-insights-panel";
+import { ChartCard } from "@/components/charts/chart-card";
+import { HorizontalRankingChart } from "@/components/charts/horizontal-ranking-chart";
+import { StackedRunBars } from "@/components/charts/stacked-run-bars";
+import { WeeklyBarChart } from "@/components/charts/weekly-bar-chart";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonBlock } from "@/components/ui/skeleton";
 import { getTrainingDataInsights } from "@/lib/analytics/data-insights";
+import { getRunExposureChartData } from "@/lib/analytics/chart-data";
 import {
   getLatestDate,
   getPeriodRange,
@@ -131,6 +136,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
   const historicalStats = summarizeRunning(runningRows);
   const shoeVolumes = getRunningShoeVolumes(runningRows);
   const weeklySummaries = groupRunningByCalendarWeek(runningRows, 12);
+  const runExposureChartData = useMemo(() => getRunExposureChartData(sessions).slice(-10), [sessions]);
   const dataAnalysis = useMemo(() => getTrainingDataInsights(sessions, { period: "week" }), [sessions]);
   const latestTrainingDate = getLatestDate(sessions);
   const weekReferenceDate = resolvePeriodReferenceDate("week", latestTrainingDate);
@@ -140,6 +146,15 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
   const currentMonthExposure = getRunningBreakdown(filterSessionsByRange(sessions, getPeriodRange("month", monthReferenceDate)));
   const allExposure = getRunningBreakdown(sessions);
   const maxWeeklyMeters = Math.max(...weeklySummaries.map((week) => week.runMeters), 1);
+  const paceRows = runningRows
+    .filter((row) => row.paceSecondsPerKm !== null)
+    .slice(0, 8)
+    .map((row) => ({
+      key: row.session.id,
+      label: formatDate(row.session.date),
+      value: row.paceSecondsPerKm ?? 0,
+      detail: `${formatKm(row.runMeters, { forceKm: true })} · ${row.session.title}`,
+    }));
   const isMetricsLoading = isLoading || !isReady;
   const weekKmState = isMetricsLoading ? "loading" : currentWeekExposure.totalRunExposureMeters > 0 ? "ready" : "empty";
   const monthKmState = isMetricsLoading ? "loading" : currentMonthExposure.totalRunExposureMeters > 0 ? "ready" : "empty";
@@ -157,7 +172,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
 
       <section className="mb-5 flex flex-wrap gap-2">
         <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
-          {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
+          {source === "remote" ? "Datos reales" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
         </Badge>
         {pendingSessions.length > 0 ? <Badge tone="warning">Pendientes locales {pendingSessions.length}</Badge> : null}
       </section>
@@ -183,6 +198,86 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
         <MetricCard label="Sesiones running" value={`${historicalStats.sessions}`} detail="Solo type running" state={sessionsState} />
         <MetricCard label="Duración running" value={formatDuration(historicalStats.durationMinutes)} detail="Histórico con dato" state={durationState} />
         <MetricCard label="RPE medio running" value={formatRpe(historicalStats.averageRpe)} detail="Sesiones con RPE" state={rpeState} />
+      </section>
+
+      <section className="mt-6 grid gap-5 xl:grid-cols-4">
+        <ChartCard
+          title="Carrera por semana"
+          description="Running estructurado separado de carrera en sesiones mixtas."
+          unit="km"
+          compact
+          currentValue={formatKm(currentWeekExposure.totalRunExposureMeters, { forceKm: true })}
+          meta={[
+            { label: "Running", value: formatKm(currentWeekExposure.structuredMeters, { forceKm: true }) },
+            { label: "Mixto", value: formatKm(currentWeekExposure.mixedMeters, { forceKm: true }) },
+          ]}
+          isLoading={isMetricsLoading}
+          footer="La carrera mixta cuenta como impacto, pero no como running técnico."
+        >
+          <StackedRunBars
+            data={runExposureChartData.map((week) => ({
+              key: week.weekKey,
+              label: week.label,
+              structuredRunMeters: week.structuredRunMeters,
+              mixedRunMeters: week.mixedRunMeters,
+            }))}
+            compact
+            formatter={(value) => formatKm(value, { forceKm: true })}
+          />
+        </ChartCard>
+        <ChartCard
+          title="Running estructurado"
+          description="Kilómetros por semana solo con type === running."
+          unit="km"
+          compact
+          currentValue={formatKm(periods.week.runMeters, { forceKm: true })}
+          meta={[{ label: "Sesiones", value: `${periods.week.sessions}` }]}
+          isLoading={isMetricsLoading}
+        >
+          <WeeklyBarChart
+            data={weeklySummaries.map((week) => ({ key: week.weekKey, label: week.weekKey, value: week.runMeters }))}
+            compact
+            formatter={(value) => formatKm(value, { forceKm: true })}
+            tone="secondary"
+          />
+        </ChartCard>
+        <ChartCard
+          title="Ritmo medio"
+          description="Sesiones running con distancia y duración suficientes."
+          unit="min/km"
+          compact
+          currentValue={paceRows[0] ? formatPace(Math.round(paceRows[0].value)) : undefined}
+          meta={paceRows[0] ? [{ label: "Última sesión", value: paceRows[0].label }] : undefined}
+          isLoading={isMetricsLoading}
+          footer={paceRows.length === 0 ? "Faltan distancia o duración para calcular ritmo medio." : "Ritmo calculado desde duración y distancia registrada."}
+        >
+          <HorizontalRankingChart
+            emptyLabel="Sin datos suficientes de ritmo"
+            formatter={(value) => formatPace(Math.round(value))}
+            items={paceRows}
+            tone="neutral"
+          />
+        </ChartCard>
+        <ChartCard
+          title="Zapatillas"
+          description="Kilómetros, sesiones y uso registrado por modelo."
+          unit="km"
+          compact
+          currentValue={shoeVolumes[0] ? shoeVolumes[0].shoes : undefined}
+          meta={shoeVolumes[0] ? [{ label: "Volumen", value: formatKm(shoeVolumes[0].runMeters, { forceKm: true }) }] : undefined}
+          isLoading={isMetricsLoading}
+        >
+          <HorizontalRankingChart
+            emptyLabel="Sin zapatillas registradas"
+            formatter={(value) => formatKm(value, { forceKm: true })}
+            items={shoeVolumes.map((entry) => ({
+              key: entry.shoes,
+              label: entry.shoes,
+              value: entry.runMeters,
+              detail: `${entry.sessions} sesiones`,
+            }))}
+          />
+        </ChartCard>
       </section>
 
       <section className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px]">

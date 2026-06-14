@@ -2,26 +2,28 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { DashboardDataInsights } from "@/components/analytics/data-insights-panel";
-import { PeriodReportsSection } from "@/components/analysis/period-report-list";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { ChartCard } from "@/components/charts/chart-card";
+import { StackedRunBars } from "@/components/charts/stacked-run-bars";
+import { formatTrendValue, getTrendStatusTone, trendStatusLabels } from "@/components/charts/trend-card-chart";
+import { WeeklyBarChart } from "@/components/charts/weekly-bar-chart";
 import { MetricCard } from "@/components/ui/metric-card";
 import { SkeletonBlock } from "@/components/ui/skeleton";
-import { MuscleLoadList } from "@/components/muscle-load/muscle-load-list";
-import { TrainingSessionCard } from "@/components/training/training-session-card";
+import { KeyTrendsPreview } from "@/components/dashboard/key-trends-preview";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
+import { PeriodDecisionSummary } from "@/components/dashboard/period-decision-summary";
+import { RecommendedDecisionCard } from "@/components/dashboard/recommended-decision-card";
 import { DisciplinesOverview } from "@/components/dashboard/disciplines-overview";
-import { TrendsSection } from "@/components/dashboard/trends-section";
+import { ReportsPreview } from "@/components/dashboard/reports-preview";
+import { getWeeklyChartData } from "@/lib/analytics/chart-data";
 import { getTrainingDataInsights } from "@/lib/analytics/data-insights";
 import { getWeeklyTrendMetrics } from "@/lib/analytics/trends";
 import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
 import { filterSessionsByPeriod } from "@/lib/domain/dashboard/periods";
-import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
 import { secondaryActivityKindLabels, summarizeSecondaryActivities, type SecondaryActivitySummary } from "@/lib/domain/training/secondary-activity";
-import { compareWeeks } from "@/lib/selectors/training";
 import { useDashboardData } from "@/lib/storage/use-dashboard-data";
-import { formatDuration } from "@/lib/utils/format";
+import { formatDuration, formatLoadKg } from "@/lib/utils/format";
 import type { DashboardPeriod } from "@/lib/domain/dashboard/periods";
 import type { RunningBreakdown } from "@/lib/domain/training/run-exposure";
 import type { BodyCheck } from "@/types/body";
@@ -95,6 +97,52 @@ function ComplementaryVolumeCard({
   );
 }
 
+function WatchSignalsCard({
+  analysis,
+  isLoading,
+}: {
+  analysis: ReturnType<typeof getTrainingDataInsights>;
+  isLoading?: boolean;
+}) {
+  return (
+    <Card>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Qué vigilar</p>
+          <h3 className="mt-2 text-2xl font-black tracking-tight">Riesgos principales</h3>
+        </div>
+        <Link href="/analysis" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+          Ver detalle
+        </Link>
+      </div>
+      <div className="mt-4 grid gap-3">
+        {isLoading ? (
+          <>
+            <SkeletonBlock className="h-20 w-full" />
+            <SkeletonBlock className="h-20 w-full" />
+          </>
+        ) : analysis.summary.warnings.length > 0 ? (
+          analysis.summary.warnings.slice(0, 3).map((warning) => (
+            <div key={warning.id} className="rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-3">
+              <p className="text-sm font-bold text-[var(--foreground)]">{warning.title}</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">
+                {(warning.evidence.length > 1 ? warning.evidence.slice(0, 2).join(" ") : warning.evidence[0]) ?? warning.message}
+              </p>
+              {warning.recommendation ? (
+                <p className="mt-2 text-sm font-semibold leading-6 text-[var(--foreground)]">{warning.recommendation}</p>
+              ) : null}
+            </div>
+          ))
+        ) : (
+          <p className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 text-sm leading-6 text-[var(--muted)]">
+            Sin riesgos principales con los umbrales actuales.
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export function DashboardView({
   sessions,
   bodyChecks,
@@ -124,20 +172,30 @@ export function DashboardView({
     [dashboardBodyChecks, dashboardNutritionChecks, dashboardSessions, period],
   );
   const trends = useMemo(() => getWeeklyTrendMetrics(dashboardSessions), [dashboardSessions]);
+  const weeklyChartData = useMemo(() => getWeeklyChartData(dashboardSessions).slice(-8), [dashboardSessions]);
   const dataAnalysis = useMemo(() => getTrainingDataInsights(dashboardSessions, { period }), [dashboardSessions, period]);
   const periodSessions = useMemo(() => filterSessionsByPeriod(dashboardSessions, period), [dashboardSessions, period]);
   const secondaryActivitySummary = useMemo(() => summarizeSecondaryActivities(periodSessions), [periodSessions]);
-  const weeklyComparison = useMemo(() => {
-    const { currentWeekSessions, previousWeekSessions } = getLatestWeekSessions(dashboardSessions);
-
-    return compareWeeks(currentWeekSessions, previousWeekSessions);
-  }, [dashboardSessions]);
+  const fatigueCost = useMemo(
+    () => periodSessions.reduce((total, session) => total + session.sessionMetrics.fatigueCost, 0),
+    [periodSessions],
+  );
   const isMetricsLoading = isLoading || !isReady || isPeriodPending;
   const sessionsState = isMetricsLoading ? "loading" : "ready";
   const runningState = isMetricsLoading ? "loading" : "ready";
   const durationState = isMetricsLoading ? "loading" : "ready";
   const rpeState = isMetricsLoading ? "loading" : metrics.averageRpe.value !== null ? "ready" : "empty";
-  const metricValueState = (value: number | null) => (isMetricsLoading ? "loading" : value !== null ? "ready" : "empty");
+  const fatigueState = isMetricsLoading ? "loading" : periodSessions.length > 0 ? "ready" : "empty";
+  const getTrendMeta = (trend: typeof trends.duration) => [
+    {
+      label: "Media reciente",
+      value: formatTrendValue(trend, trend.recentAverage),
+    },
+    {
+      label: "Cambio",
+      value: trend.changePercent === null ? "Sin referencia" : `${trend.changePercent > 0 ? "+" : ""}${trend.changePercent}%`,
+    },
+  ];
   const handlePeriodChange = (nextPeriod: DashboardPeriod) => {
     if (nextPeriod === period) {
       return;
@@ -171,7 +229,7 @@ export function DashboardView({
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
-                {source === "remote" ? "Datos Supabase" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
+                {source === "remote" ? "Datos reales" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
               </Badge>
             </div>
           </div>
@@ -192,9 +250,9 @@ export function DashboardView({
         </p>
       ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard
-          label="Sesiones completadas"
+          label="Sesiones"
           value={metrics.sessions.formattedValue}
           detail={metrics.periodDetail}
           delta={metrics.sessions.deltaLabel}
@@ -204,6 +262,7 @@ export function DashboardView({
           comparison={metrics.sessions.comparisonDisplay}
           tone="strong"
           state={sessionsState}
+          sparklineData={weeklyChartData.map((week) => week.sessions)}
         />
         <MetricCard
           label="Carrera total"
@@ -216,6 +275,7 @@ export function DashboardView({
           comparison={metrics.runningKm.comparisonDisplay}
           tone="strong"
           state={runningState}
+          sparklineData={weeklyChartData.map((week) => week.totalRunMeters)}
         />
         <MetricCard
           label="Duración total"
@@ -227,6 +287,7 @@ export function DashboardView({
           secondaryDeltaTone={metrics.durationMinutes.previousDeltaTone}
           comparison={metrics.durationMinutes.comparisonDisplay}
           state={durationState}
+          sparklineData={weeklyChartData.map((week) => week.durationMinutes)}
         />
         <MetricCard
           label="RPE medio"
@@ -235,222 +296,140 @@ export function DashboardView({
           delta={metrics.averageRpe.deltaLabel}
           deltaTone={metrics.averageRpe.deltaTone}
           state={rpeState}
+          sparklineData={weeklyChartData.map((week) => week.averageRpe ?? 0)}
         />
         <MetricCard
-          label="Peso actual"
-          value={metrics.weightKg.formattedValue}
-          detail="Último registro corporal"
-          delta={metrics.weightKg.deltaLabel}
-          deltaTone={metrics.weightKg.deltaTone}
-          state={metricValueState(metrics.weightKg.value)}
-        />
-        <MetricCard
-          label="Cintura actual"
-          value={metrics.waistCm.formattedValue}
-          detail="Último registro corporal"
-          delta={metrics.waistCm.deltaLabel}
-          deltaTone={metrics.waistCm.deltaTone}
-          state={metricValueState(metrics.waistCm.value)}
-        />
-        <MetricCard
-          label="Adherencia nutricional"
-          value={metrics.nutritionAdherence.formattedValue}
-          detail="Media del periodo"
-          delta={metrics.nutritionAdherence.deltaLabel}
-          deltaTone={metrics.nutritionAdherence.deltaTone}
-          state={metricValueState(metrics.nutritionAdherence.value)}
-        />
-        <MetricCard
-          label="Sueño"
-          value={metrics.sleepHours.formattedValue}
-          detail="Último registro corporal"
-          delta={metrics.sleepHours.deltaLabel}
-          deltaTone={metrics.sleepHours.deltaTone}
-          state={metricValueState(metrics.sleepHours.value)}
+          label="Fatiga"
+          value={`${fatigueCost}`}
+          detail="Coste acumulado del periodo"
+          delta={dataAnalysis.summary.status === "alta_carga" ? "Alta carga" : dataAnalysis.summary.status === "vigilar" ? "Vigilar" : "Controlada"}
+          deltaTone={dataAnalysis.summary.status === "normal" ? "neutral" : "negative"}
+          state={fatigueState}
+          sparklineData={weeklyChartData.map((week) => week.fatigueCost)}
         />
       </section>
 
-      <section className="mt-8">
-        <DashboardDataInsights analysis={dataAnalysis} isLoading={isMetricsLoading} />
-      </section>
-
-      <section className="mt-8">
-        <TrendsSection trends={trends} isLoading={isMetricsLoading} />
-      </section>
-
-      <section className="mt-8">
-        <PeriodReportsSection sessions={dashboardSessions} isLoading={isMetricsLoading} />
-      </section>
-
-      <section className="mt-8">
-        <ComplementaryVolumeCard summary={secondaryActivitySummary} isLoading={isMetricsLoading} />
-      </section>
-
-      <section className="mt-8">
+      <section id="evolucion-clave" className="mt-8 scroll-mt-24">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Detalle por disciplina</p>
-            <h3 className="mt-2 text-2xl font-black tracking-tight">Tendencias y distribución</h3>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Evolución clave</p>
+            <h3 className="mt-2 text-2xl font-black tracking-tight">Últimas semanas</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Carrera, duración, fatiga y peso movido para leer el periodo con contexto visual.</p>
           </div>
-          <Link href="/training/running" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
-            Ver running
+          <Link href="/analysis" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+            Ver profundidad
           </Link>
         </div>
-        <DisciplinesOverview sessions={dashboardSessions} isLoading={isMetricsLoading} />
+        <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-4">
+          <ChartCard
+            title="Carrera total"
+            description="Running estructurado frente a carrera en sesiones mixtas."
+            unit="km"
+            compact
+            currentValue={formatTrendValue(trends.runExposure.total, trends.runExposure.total.currentValue)}
+            meta={getTrendMeta(trends.runExposure.total)}
+            status={{ label: trendStatusLabels[trends.runExposure.total.status], tone: getTrendStatusTone(trends.runExposure.total.status) }}
+            isLoading={isMetricsLoading}
+            footer={trends.runExposure.total.message}
+          >
+            <StackedRunBars
+              data={weeklyChartData.map((week) => ({
+                key: week.weekKey,
+                label: week.label,
+                structuredRunMeters: week.structuredRunMeters,
+                mixedRunMeters: week.mixedRunMeters,
+              }))}
+              compact
+              formatter={(value) => formatKmValue(value)}
+            />
+          </ChartCard>
+          <ChartCard
+            title="Duración"
+            description="Minutos acumulados por semana calendario."
+            unit="tiempo"
+            compact
+            currentValue={formatTrendValue(trends.duration, trends.duration.currentValue)}
+            meta={getTrendMeta(trends.duration)}
+            status={{ label: trendStatusLabels[trends.duration.status], tone: getTrendStatusTone(trends.duration.status) }}
+            isLoading={isMetricsLoading}
+            footer={trends.duration.message}
+          >
+            <WeeklyBarChart
+              data={weeklyChartData.map((week) => ({ key: week.weekKey, label: week.label, value: week.durationMinutes }))}
+              compact
+              formatter={(value) => formatDuration(value, { emptyLabel: "0 min" })}
+            />
+          </ChartCard>
+          <ChartCard
+            title="Fatiga semanal"
+            description="Coste acumulado según sessionMetrics.fatigueCost."
+            unit="pts"
+            compact
+            currentValue={formatTrendValue(trends.load, trends.load.currentValue)}
+            meta={getTrendMeta(trends.load)}
+            status={{ label: trendStatusLabels[trends.load.status], tone: getTrendStatusTone(trends.load.status) }}
+            isLoading={isMetricsLoading}
+            footer={trends.load.message}
+          >
+            <WeeklyBarChart
+              data={weeklyChartData.map((week) => ({ key: week.weekKey, label: week.label, value: week.fatigueCost }))}
+              compact
+              formatter={(value) => `${Math.round(value)} pts`}
+              tone={trends.load.status === "subida_brusca" ? "warning" : "accent"}
+            />
+          </ChartCard>
+          <ChartCard
+            title="Peso movido"
+            description="Carga externa estimada por semana."
+            unit="kg/t"
+            compact
+            currentValue={formatTrendValue(trends.externalLoad, trends.externalLoad.currentValue)}
+            meta={getTrendMeta(trends.externalLoad)}
+            status={{ label: trendStatusLabels[trends.externalLoad.status], tone: getTrendStatusTone(trends.externalLoad.status) }}
+            isLoading={isMetricsLoading}
+            footer={trends.externalLoad.message}
+          >
+            <WeeklyBarChart
+              data={weeklyChartData.map((week) => ({ key: week.weekKey, label: week.label, value: week.totalExternalLoadKg }))}
+              compact
+              formatter={formatLoadKg}
+              tone="secondary"
+            />
+          </ChartCard>
+        </div>
       </section>
 
-      <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
+      <section className="mt-8">
+        <PeriodDecisionSummary analysis={dataAnalysis} isLoading={isMetricsLoading} />
+      </section>
+
+      <section className="mt-8 grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <WatchSignalsCard analysis={dataAnalysis} isLoading={isMetricsLoading} />
+        <RecommendedDecisionCard analysis={dataAnalysis} isLoading={isMetricsLoading} />
+      </section>
+
+      <section className="mt-8">
+        <KeyTrendsPreview trends={trends} isLoading={isMetricsLoading} />
+      </section>
+
+      <section className="mt-8">
+        <ReportsPreview sessions={dashboardSessions} isLoading={isMetricsLoading} />
+      </section>
+
+      <section className="mt-8 grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
         <div>
-          <div className="mb-4 flex items-end justify-between gap-4">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Actividad del periodo</p>
-              <h3 className="mt-2 text-2xl font-black tracking-tight">Entrenamientos relevantes</h3>
-              <p className="mt-2 text-sm text-[var(--muted)]">{metrics.periodDetail}</p>
+              <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Distribución del periodo</p>
+              <h3 className="mt-2 text-2xl font-black tracking-tight">Disciplinas</h3>
             </div>
-            <Link href="/training" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
-              Ver log
+            <Link href="/analysis" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+              Ver análisis
             </Link>
           </div>
-          <div className="grid gap-4">
-            {isMetricsLoading ? (
-              Array.from({ length: 3 }).map((_, index) => (
-                <div key={index} className="rounded-md border border-[var(--line)] bg-[linear-gradient(180deg,var(--panel-strong),var(--panel))] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.22)]" aria-label="Entrenamiento calculando">
-                  <SkeletonBlock className="h-4 w-32" />
-                  <SkeletonBlock className="mt-3 h-6 w-3/4" />
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <SkeletonBlock className="h-12" />
-                    <SkeletonBlock className="h-12" />
-                    <SkeletonBlock className="h-12" />
-                  </div>
-                </div>
-              ))
-            ) : metrics.recentSessions.length > 0 ? (
-              metrics.recentSessions.map((session) => (
-                <TrainingSessionCard key={session.id} session={session} />
-              ))
-            ) : (
-              <div className="rounded-md border border-[var(--line)] bg-[linear-gradient(180deg,var(--panel-strong),var(--panel))] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_22px_70px_rgba(0,0,0,0.22)]">
-                Sin sesiones en este periodo.
-              </div>
-            )}
-          </div>
+          <DisciplinesOverview sessions={dashboardSessions} isLoading={isMetricsLoading} />
         </div>
-
-        <div className="space-y-5 lg:sticky lg:top-8 lg:self-start">
-          <Card>
-            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Qué vigilar</p>
-            <h3 className="mt-2 text-2xl font-black tracking-tight">Señales del periodo</h3>
-            <div className="mt-4 space-y-2 text-sm leading-6 text-[var(--muted)]">
-              {isMetricsLoading ? (
-                <>
-                  <SkeletonBlock className="h-16 w-full" />
-                  <SkeletonBlock className="h-16 w-full" />
-                </>
-              ) : metrics.alerts.length > 0 ? (
-                metrics.alerts.map((alert) => (
-                  <p
-                    key={alert.title}
-                    className={`rounded-md border p-3 ${
-                      alert.tone === "critical"
-                        ? "border-[rgba(255,110,110,0.28)] bg-[rgba(255,110,110,0.08)]"
-                        : "border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)]"
-                    }`}
-                  >
-                    <span className={alert.tone === "critical" ? "font-semibold text-[#ff8a8a]" : "font-semibold text-[var(--warning)]"}>
-                      {alert.title}:
-                    </span>{" "}
-                    {alert.detail}
-                  </p>
-                ))
-              ) : (
-                <p>Sin alertas con los datos actuales del periodo.</p>
-              )}
-            </div>
-          </Card>
-
-          <Card>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Carga acumulada</p>
-                <h3 className="mt-2 text-2xl font-black tracking-tight">Músculos más cargados</h3>
-              </div>
-              <p className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] px-3 py-2 text-right font-mono text-xs font-black text-[var(--muted-strong)]">
-                {metrics.muscleLoadDeltaLabel}
-              </p>
-            </div>
-            {isMetricsLoading ? null : (
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                Ranking técnico para decidir dónde empujar y dónde bajar exposición.
-              </p>
-            )}
-            <div className="mt-5">
-              {isMetricsLoading ? (
-                <div className="space-y-3" aria-label="Carga muscular calculando">
-                  <SkeletonBlock className="h-12 w-full" />
-                  <SkeletonBlock className="h-12 w-full" />
-                  <SkeletonBlock className="h-12 w-full" />
-                </div>
-              ) : metrics.topMuscles.length > 0 ? (
-                <MuscleLoadList muscles={metrics.topMuscles} />
-              ) : (
-                <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-4 text-sm leading-6 text-[var(--muted)]">
-                  Sin datos del periodo.
-                </div>
-              )}
-            </div>
-            <Link href="/muscle-load" className="mt-4 inline-flex text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
-              Abrir detalle muscular
-            </Link>
-          </Card>
-
-          <Card>
-            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Comparativa</p>
-            {isMetricsLoading ? (
-              <div className="mt-3" aria-label="Comparativa calculando">
-                <SkeletonBlock className="h-8 w-40" />
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <SkeletonBlock className="h-16" />
-                  <SkeletonBlock className="h-16" />
-                  <SkeletonBlock className="h-16" />
-                  <SkeletonBlock className="h-16" />
-                </div>
-              </div>
-            ) : (
-              <>
-            <h3 className="mt-2 text-2xl font-black tracking-tight">{weeklyComparison.current.weekKey}</h3>
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
-                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Sesiones</dt>
-                <dd className="mt-1 font-mono text-lg font-black">{weeklyComparison.current.sessions}</dd>
-              </div>
-              <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
-                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Carrera total</dt>
-                <dd className="mt-1 font-mono text-lg font-black">{(weeklyComparison.current.runMeters / 1000).toFixed(1)} km</dd>
-              </div>
-              <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
-                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Duración</dt>
-                <dd className="mt-1 font-mono text-lg font-black">{formatDuration(weeklyComparison.current.durationMinutes)}</dd>
-              </div>
-              <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.03)] p-3">
-                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Fatiga</dt>
-                <dd className="mt-1 font-mono text-lg font-black">{weeklyComparison.current.fatigueCost}</dd>
-              </div>
-            </dl>
-            <div className="mt-4 space-y-2 text-sm leading-6 text-[var(--muted)]">
-              {weeklyComparison.alerts.length > 0 ? (
-                weeklyComparison.alerts.map((alert) => (
-                  <p key={alert.title} className="rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-3">
-                    <span className="font-semibold text-[var(--warning)]">{alert.title}:</span> {alert.recommendation}
-                  </p>
-                ))
-              ) : (
-                <p>Sin alertas semanales con los datos actuales.</p>
-              )}
-            </div>
-              </>
-            )}
-          </Card>
-        </div>
+        <ComplementaryVolumeCard summary={secondaryActivitySummary} isLoading={isMetricsLoading} />
       </section>
     </>
   );

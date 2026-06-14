@@ -424,18 +424,18 @@ function getStatusMessage(status: TrendStatus, label: string, metricType: TrendM
 
   if (status === "subida_brusca") {
     if (metricType === "run") {
-      return "Carrera total con subida brusca. Vigilar impacto.";
+      return "Carrera total por encima de referencia. Vigilar impacto antes de sumar intensidad.";
     }
 
     if (metricType === "impact") {
-      return "Impacto alto respecto a la media reciente. Vigilar gemelos/aductores.";
+      return "Impacto por encima de referencia. Revisar gemelos, aductores y molestias.";
     }
 
     if (metricType === "fatigue") {
-      return "Fatiga con subida brusca. Vigilar recuperación.";
+      return "Fatiga por encima de referencia. Vigilar recuperación.";
     }
 
-    return `${label} con subida brusca. Vigilar acumulación.`;
+    return `${label} por encima de referencia. Vigilar acumulación.`;
   }
 
   if (status === "descarga") {

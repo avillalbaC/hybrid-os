@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
+import { getInsightsForSurface } from "@/lib/analytics/insight-surface";
 import type { DataInsight, DataInsightCategory, DataInsightSeverity, TrainingDataInsightsResult } from "@/lib/analytics/data-insights";
 
 const categoryLabels: Record<DataInsightCategory, string> = {
@@ -30,19 +32,7 @@ function getSectionInsights(analysis: TrainingDataInsightsResult, categories: Da
   return analysis.insights.filter((insight) => categories.includes(insight.category)).slice(0, limit);
 }
 
-function getRunningInsights(analysis: TrainingDataInsightsResult, limit = 3) {
-  const runningIds = new Set(["hyrox-without-structured-run", "running-shoes-missing"]);
-
-  return analysis.insights
-    .filter((insight) => insight.category === "running" || runningIds.has(insight.id))
-    .slice(0, limit);
-}
-
-function getMuscleInsights(analysis: TrainingDataInsightsResult, limit = 4) {
-  return analysis.insights.filter((insight) => insight.category === "muscle").slice(0, limit);
-}
-
-function InsightCard({ insight }: { insight: DataInsight }) {
+export function InsightCard({ insight }: { insight: DataInsight }) {
   const isWarning = insight.severity === "warning" || insight.severity === "critical";
 
   return (
@@ -68,7 +58,7 @@ function InsightCard({ insight }: { insight: DataInsight }) {
   );
 }
 
-function InsightList({
+export function InsightList({
   empty,
   insights,
 }: {
@@ -116,6 +106,7 @@ export function QuickDataInsightCard({
   }
 
   const recommendation = analysis.summary.recommendations[0] ?? "Mantener registro y revisar la siguiente sesión con datos reales.";
+  const homeSignals = getInsightsForSurface(analysis, "home");
 
   return (
     <Card>
@@ -127,7 +118,7 @@ export function QuickDataInsightCard({
       </div>
       <h3 className="mt-3 text-xl font-black tracking-tight">{analysis.summary.headline}</h3>
       <div className="mt-4 space-y-3">
-        {analysis.summary.topSignals.slice(0, 3).map((signal) => (
+        {homeSignals.map((signal) => (
           <p key={signal.id} className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 text-sm leading-6 text-[var(--muted-strong)]">
             <span className="font-semibold text-[var(--foreground)]">{signal.title}:</span> {signal.evidence[0] ?? signal.message}
           </p>
@@ -215,12 +206,17 @@ export function RunningDataInsightCard({
     return <AnalysisSkeleton compact />;
   }
 
-  const runningInsights = getRunningInsights(analysis, 3);
+  const runningInsights = getInsightsForSurface(analysis, "running");
   const runningSummary = runningInsights[0]?.message ?? "Sin señales específicas de carrera con los datos actuales.";
 
   return (
     <Card>
-      <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Lectura de carrera</p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Lectura de carrera</p>
+        <Link href="/analysis" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+          Ver análisis completo
+        </Link>
+      </div>
       <h3 className="mt-3 text-xl font-black tracking-tight">{runningInsights[0]?.title ?? analysis.summary.headline}</h3>
       <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">{runningSummary}</p>
       <div className="mt-4">
@@ -241,7 +237,7 @@ export function MuscleDataInsightCard({
     return <AnalysisSkeleton compact />;
   }
 
-  const muscleInsights = getMuscleInsights(analysis, 4);
+  const muscleInsights = getInsightsForSurface(analysis, "muscleLoad");
 
   return (
     <Card>
@@ -250,6 +246,9 @@ export function MuscleDataInsightCard({
           Lectura avanzada
         </Badge>
         <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Lectura muscular avanzada</p>
+        <Link href="/analysis" className="ml-auto text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+          Ver análisis completo
+        </Link>
       </div>
       <h3 className="mt-3 text-xl font-black tracking-tight">{muscleInsights[0]?.title ?? analysis.summary.headline}</h3>
       <div className="mt-4">

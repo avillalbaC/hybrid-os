@@ -9,6 +9,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 const SIDEBAR_STORAGE_KEY = "hybrid-os:sidebar-collapsed";
 
 const routeContext = [
+  { prefix: "/analysis", period: "Análisis profundo", source: "Informes dinámicos" },
   { prefix: "/dashboard", period: "Periodo: seleccionable", source: "Fuente: Supabase primero" },
   { prefix: "/training/import", period: "Importación", source: "Raw data preservada" },
   { prefix: "/training/running", period: "Running", source: "Entrenamientos reales" },

@@ -435,8 +435,10 @@ function buildInsights(
       id: "run-exposure-spike",
       category: "running",
       severity: isCriticalRunSpike ? "critical" : "warning",
-      title: "Carrera total en subida brusca",
-      message: `La carrera total sube frente al bloque reciente: ${formatKm(totalRun, { forceKm: true })} esta semana.`,
+      title: "Carrera total por encima de referencia",
+      message: trends.runExposure.total.recentAverage
+        ? `${formatKm(totalRun, { forceKm: true })} esta semana frente a ${formatKm(trends.runExposure.total.recentAverage, { forceKm: true })} de referencia reciente. Vigilar impacto antes de añadir otra sesión intensa.`
+        : `La carrera total sube frente al bloque reciente: ${formatKm(totalRun, { forceKm: true })} esta semana.`,
       evidence: getTrendEvidence(trends.runExposure.total, formatKm(totalRun, { forceKm: true })),
       recommendation: "No añadir intensidad de carrera hasta revisar gemelos, sóleo y molestias de impacto.",
       metric: { label: "Carrera total", value: formatKm(totalRun, { forceKm: true }) },
