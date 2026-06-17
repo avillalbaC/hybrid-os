@@ -94,6 +94,8 @@ Home:
 - Maximo 2-3 senales.
 - Maximo 1 accion.
 - No informes ni listas largas.
+- Puede combinar la accion recomendada con el Plan diario como contexto operativo.
+- El Plan diario no debe duplicar Dashboard ni convertir recomendaciones en tareas automaticas todavia.
 
 Dashboard:
 

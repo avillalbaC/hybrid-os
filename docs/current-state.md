@@ -1,6 +1,6 @@
 # Hybrid OS - Current State
 
-Snapshot: 2026-06-14
+Snapshot: 2026-06-17
 
 Este documento describe el estado real del proyecto en este snapshot. No debe usarse para guardar metricas que cambian cada dia, salvo que se marquen explicitamente como snapshot.
 
@@ -57,6 +57,7 @@ Tablas principales:
 - `training_exercises`: ejercicios normalizados por sesion y bloque, con `user_id`.
 - `body_checks`: body checks opcionales importados, con `user_id` cuando existan.
 - `nutrition_checks`: nutrition checks opcionales importados, con `user_id` cuando existan.
+- `daily_entries`: plan diario manual por usuario y fecha, con prioridades, movilidad y nota rapida.
 
 Columnas analiticas relevantes en `training_sessions`:
 
@@ -89,7 +90,7 @@ Politica vigente:
 
 ### UI
 
-- `/`: Home ejecutiva corta para estado actual, ultimo entrenamiento, analisis rapido, vigilancia y accesos.
+- `/`: Home ejecutiva corta para estado actual, Daily Plan, ultimo entrenamiento, analisis rapido, vigilancia y accesos.
 - `/dashboard`: Centro de decision del periodo actual.
 - `/analysis`: Analisis profundo con lectura actual, informes, tendencias y calidad de datos.
 - `/training`: Training Log.
@@ -109,6 +110,9 @@ Politica vigente:
 - `DELETE /api/training-sessions/:id`: elimina una sesion propia.
 - `POST /api/imports`: importa uno o varios `HybridOSAppInput` para el usuario autenticado.
 - `GET /api/dashboard-data`: devuelve sesiones, body checks y nutrition checks del usuario autenticado para Dashboard.
+- `GET /api/daily-entry?date=YYYY-MM-DD`: devuelve la entrada diaria propia o `null`.
+- `PUT /api/daily-entry`: crea o actualiza la entrada diaria propia para una fecha.
+- `GET /api/daily-entry/range?start=YYYY-MM-DD&end=YYYY-MM-DD`: devuelve entradas diarias propias para un rango.
 
 Las rutas API privadas estan protegidas por Supabase Auth y deben respetar RLS.
 
@@ -165,12 +169,13 @@ Reglas que deben preservarse:
 - Ruta `/analysis` para informes semanales/mensuales, tendencias completas, evidencias y calidad de datos.
 - Post-refactor polish: tabs mobile de Analysis sin scrollbar nativa, copy de decision mas accionable y acciones priorizadas de calidad de datos.
 - Capa Visual Analytics: componentes reutilizables en `components/charts`, datasets en `lib/analytics/chart-data.ts` y graficos ligeros en Dashboard, Analysis, Running, Muscle Load y Home.
+- Daily Plan MVP en Home: `daily_entries` con RLS, API privada, tres prioridades, movilidad, foco y nota rapida.
 - Training Log, detalle, weekly, running y muscle load funcionales sobre la capa actual de sesiones.
 - BodyHeatmap actual simplificado: ranking, barras y placeholder visual en vez de muneco generado por codigo.
 
 ## Reparto de responsabilidades UI
 
-- Home: centro de mando diario rapido. Debe responder que esta pasando ahora, cual fue el ultimo entrenamiento, que senales vigilar y a donde ir.
+- Home: centro de mando diario rapido. Debe responder que esta pasando ahora, cual es el plan de hoy, cual fue el ultimo entrenamiento, que senales vigilar y a donde ir.
 - Dashboard: centro de decision del periodo actual. Debe priorizar KPIs, lectura ejecutiva, riesgos principales, una decision recomendada, tendencias clave y previews.
 - Analysis: vista profunda. Contiene analisis completo, informes semanales y mensuales, tendencias completas agrupadas y calidad de datos.
 - Running: analisis especifico de carrera. No debe repetir lectura global salvo enlace a Analysis.
@@ -199,6 +204,11 @@ Regla de producto:
 
 ## Pendiente
 
+- Crear ruta dedicada `/daily` para revisar y editar entradas diarias fuera de Home.
+- Conectar check diario/body check cuando el alcance de Body/Nutrition vuelva a ser prioritario.
+- Implementar parser de check pegado para daily/body cuando se cierre el formato.
+- Preparar futura importacion desde Google Drive sin activarla todavia.
+- Crear revision semanal basada en `daily_entries` cuando haya uso real suficiente.
 - Mejorar feedback limpio del importador: errores, warnings, duplicados, estados de guardado y dry-run.
 - Anadir loading states globales y consistentes en pantallas prioritarias.
 - Implementar `HybridOSAppInput` v1.1 enfocado primero en zapatillas running.

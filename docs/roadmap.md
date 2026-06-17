@@ -33,22 +33,58 @@ Este roadmap refleja la direccion actual del proyecto. Mantiene el foco en datos
 - Post-refactor polish: mobile tabs, copy de decision, warnings con accion y quality actions.
 - Visual Analytics layer: graficos ligeros reutilizables, datasets normalizados y visualizacion en Dashboard, Analysis, Running, Muscle Load y Home.
 - Visual Analytics polish: cards con valor actual/referencia/estado, tendencias mejor agrupadas, calidad de datos con impacto y preparacion documental para objetivos activos.
+- Daily Plan MVP en Home: tabla `daily_entries`, API privada, tres prioridades, movilidad, foco y nota rapida.
 
 ## Siguiente roadmap
 
 Orden actual:
 
-1. Objetivos activos.
-2. Body map asset-based.
-3. Body/Nutrition Supabase.
-4. Feedback loop de recomendaciones.
-5. QA/calibracion continua de Visual Analytics con datos reales.
-6. Feedback importador + dry-run.
-7. Loading states globales.
-8. v1.1 zapatillas running.
-9. Volumen por zapatilla.
-10. Responsive/mobile audit.
-11. PWA basica mas adelante.
+1. Ruta `/daily` para historico/edicion semanal de Daily Plan.
+2. Check diario/bodyCheck.
+3. Parser de check pegado.
+4. Importacion Google Drive.
+5. Revision semanal.
+6. Objetivos activos.
+7. Body map asset-based.
+8. Body/Nutrition Supabase.
+9. Feedback loop de recomendaciones.
+10. QA/calibracion continua de Visual Analytics con datos reales.
+11. Feedback importador + dry-run.
+12. Loading states globales.
+13. v1.1 zapatillas running.
+14. Volumen por zapatilla.
+15. Responsive/mobile audit.
+16. PWA basica mas adelante.
+
+## Iteracion reciente - Daily Plan MVP
+
+Estado: completada base MVP.
+
+Alcance:
+
+- Nueva tabla `daily_entries` con una entrada unica por usuario y fecha.
+- RLS por `auth.uid() = user_id`.
+- Tipos `DailyEntry`, `DailyPriority` y `DailyEntryInput`.
+- Helper server-side de Supabase y API privada `GET/PUT /api/daily-entry`.
+- Endpoint de rango para futura vista semanal.
+- Home incorpora `Plan de hoy` con tres prioridades, movilidad, minutos, foco y nota rapida.
+- La accion recomendada existente de Hybrid OS se muestra como contexto, no como tarea automatica.
+
+No alcance:
+
+- No toca `training_sessions`.
+- No modifica contratos JSON ni importador.
+- No conecta Google Drive.
+- No anade parser ni IA runtime.
+- No implementa objetivos activos.
+
+Proximos pasos:
+
+1. Ruta `/daily`.
+2. Check diario/bodyCheck.
+3. Parser de check pegado.
+4. Importacion Google Drive.
+5. Revision semanal.
 
 ## Iteracion reciente - Visual Analytics layer
 

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { QuickDataInsightCard } from "@/components/analytics/data-insights-panel";
 import { MetricSparkline } from "@/components/charts/metric-sparkline";
+import { DailyPlanCard } from "@/components/home/daily-plan-card";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
@@ -433,7 +434,7 @@ export function HomeView({
 
   return (
     <>
-      <section className="mb-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-stretch">
+      <section className="mb-6">
         <div className="rounded-md border border-[var(--line)] bg-[linear-gradient(135deg,var(--accent-hero),rgba(18,23,21,0.98)_44%,rgba(11,14,13,0.98))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)] sm:p-7">
           <p className="text-[0.7rem] font-bold uppercase tracking-[0.28em] text-[var(--accent)]">Centro de mando diario</p>
           <div className="mt-3 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
@@ -474,17 +475,6 @@ export function HomeView({
             <SecondaryAction href="/dashboard">Ver dashboard</SecondaryAction>
           </div>
         </div>
-
-        <Card>
-          <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Último entrenamiento</p>
-          {isMetricsLoading ? (
-            <LatestSessionSkeleton />
-          ) : latestSession ? (
-            <LatestSessionCard session={latestSession} />
-          ) : (
-            <p className="mt-4 text-sm leading-6 text-[var(--muted)]">Sin sesiones en este periodo.</p>
-          )}
-        </Card>
       </section>
 
       {syncMessage ? (
@@ -494,10 +484,25 @@ export function HomeView({
       ) : null}
 
       <div className="flex flex-col gap-6">
-        <section className="grid gap-5 lg:grid-cols-3">
-          <QuickDataInsightCard analysis={dataAnalysis} isLoading={isMetricsLoading} />
-          <WatchCard signals={watchSignals} isLoading={isMetricsLoading} />
-          <NextActionCard action={nextAction} isLoading={isMetricsLoading} />
+        <DailyPlanCard recommendedAction={isMetricsLoading ? undefined : `${nextAction.title}: ${nextAction.detail}`} />
+
+        <section className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <Card>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Último entrenamiento</p>
+            {isMetricsLoading ? (
+              <LatestSessionSkeleton />
+            ) : latestSession ? (
+              <LatestSessionCard session={latestSession} />
+            ) : (
+              <p className="mt-4 text-sm leading-6 text-[var(--muted)]">Sin sesiones en este periodo.</p>
+            )}
+          </Card>
+
+          <div className="grid gap-5 lg:grid-cols-3">
+            <QuickDataInsightCard analysis={dataAnalysis} isLoading={isMetricsLoading} />
+            <WatchCard signals={watchSignals} isLoading={isMetricsLoading} />
+            <NextActionCard action={nextAction} isLoading={isMetricsLoading} />
+          </div>
         </section>
 
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
