@@ -1,9 +1,16 @@
 import { PeriodReportCard } from "@/components/analysis/period-report-card";
+import { CalendarHeatmap } from "@/components/charts/calendar-heatmap";
 import { ChartCard } from "@/components/charts/chart-card";
 import { StackedRunBars } from "@/components/charts/stacked-run-bars";
+import { StackedWeeklyBars } from "@/components/charts/stacked-weekly-bars";
 import { WeeklyBarChart } from "@/components/charts/weekly-bar-chart";
 import { Card } from "@/components/ui/card";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
+import {
+  buildDisciplineDistributionData,
+  buildIntensityDistributionData,
+  buildTrainingConsistencyData,
+} from "@/lib/analytics/analysis-chart-data";
 import { getWeeklyChartData } from "@/lib/analytics/chart-data";
 import { getWeeklyReports } from "@/lib/analytics/period-reports";
 import { formatDuration, formatKm, formatRpe } from "@/lib/utils/format";
@@ -30,6 +37,9 @@ export function WeeklyReportsSection({
 }) {
   const reports = getWeeklyReports(sessions, { limit: 8, includeOpen: true });
   const weeklyData = getWeeklyChartData(sessions).slice(-8);
+  const disciplineStack = buildDisciplineDistributionData(sessions).slice(-8);
+  const intensityStack = buildIntensityDistributionData(sessions).slice(-8);
+  const consistencyData = buildTrainingConsistencyData(sessions, 84);
 
   return (
     <section>
@@ -49,7 +59,7 @@ export function WeeklyReportsSection({
           <div className="grid gap-5 xl:grid-cols-4">
             <ChartCard title="Duración semanal" description="Minutos por semana calendario." unit="tiempo">
               <WeeklyBarChart
-                data={weeklyData.map((week) => ({ key: week.weekKey, label: week.label, value: week.durationMinutes }))}
+                data={weeklyData.map((week) => ({ key: week.weekKey, label: week.label, metaLabel: week.metaLabel, isCurrentWeek: week.isCurrentWeek, value: week.durationMinutes }))}
                 formatter={(value) => formatDuration(value, { emptyLabel: "0 min" })}
               />
             </ChartCard>
@@ -58,6 +68,8 @@ export function WeeklyReportsSection({
                 data={weeklyData.map((week) => ({
                   key: week.weekKey,
                   label: week.label,
+                  metaLabel: week.metaLabel,
+                  isCurrentWeek: week.isCurrentWeek,
                   structuredRunMeters: week.structuredRunMeters,
                   mixedRunMeters: week.mixedRunMeters,
                 }))}
@@ -66,17 +78,43 @@ export function WeeklyReportsSection({
             </ChartCard>
             <ChartCard title="Fatiga semanal" description="Coste acumulado por semana." unit="pts">
               <WeeklyBarChart
-                data={weeklyData.map((week) => ({ key: week.weekKey, label: week.label, value: week.fatigueCost }))}
+                data={weeklyData.map((week) => ({ key: week.weekKey, label: week.label, metaLabel: week.metaLabel, isCurrentWeek: week.isCurrentWeek, value: week.fatigueCost }))}
                 formatter={(value) => `${Math.round(value)}`}
                 tone="warning"
               />
             </ChartCard>
             <ChartCard title="RPE y peso" description="RPE medio visualizado como intensidad; peso en el informe de cada semana." unit="RPE">
               <WeeklyBarChart
-                data={weeklyData.map((week) => ({ key: week.weekKey, label: week.label, value: week.averageRpe ?? 0 }))}
+                data={weeklyData.map((week) => ({ key: week.weekKey, label: week.label, metaLabel: week.metaLabel, isCurrentWeek: week.isCurrentWeek, value: week.averageRpe ?? 0 }))}
                 formatter={(value) => formatRpe(value)}
                 tone="secondary"
               />
+            </ChartCard>
+          </div>
+          <div className="grid gap-5 xl:grid-cols-3">
+            <ChartCard
+              title="Distribución semanal"
+              description="Sesiones por disciplina en cada semana."
+              unit="sesiones"
+              footer="Dato relevante para ver si la carga cambia por volumen o por tipo de estímulo."
+            >
+              <StackedWeeklyBars data={disciplineStack} formatter={(value) => `${Math.round(value)}`} />
+            </ChartCard>
+            <ChartCard
+              title="Intensidad semanal"
+              description="Sesiones por bucket de RPE: bajo, moderado, alto y sin dato."
+              unit="sesiones"
+              footer="Las semanas con más segmentos sin dato tienen lectura de intensidad menos completa."
+            >
+              <StackedWeeklyBars data={intensityStack} formatter={(value) => `${Math.round(value)}`} />
+            </ChartCard>
+            <ChartCard
+              title="Consistencia de registro"
+              description="Últimas 12 semanas por día, con intensidad visual según sesiones, duración y fatiga."
+              unit="días"
+              footer="La matriz muestra presencia de entrenamiento y densidad de carga registrada."
+            >
+              <CalendarHeatmap data={consistencyData} />
             </ChartCard>
           </div>
           {reports.map((report) => (

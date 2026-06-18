@@ -8,7 +8,11 @@ import type { MuscleName, PendingField, TrainingSession, TrainingSessionType } f
 
 export type WeeklyChartDataPoint = {
   weekKey: string;
+  weekStart: string;
+  weekEnd: string;
   label: string;
+  metaLabel: string;
+  isCurrentWeek: boolean;
   sessions: number;
   durationMinutes: number;
   totalRunMeters: number;
@@ -47,7 +51,11 @@ export type DisciplineDistributionItem = {
 
 export type RunExposureChartPoint = {
   weekKey: string;
+  weekStart: string;
+  weekEnd: string;
   label: string;
+  metaLabel: string;
+  isCurrentWeek: boolean;
   structuredRunMeters: number;
   mixedRunMeters: number;
   totalRunMeters: number;
@@ -126,7 +134,11 @@ function hasResult(session: TrainingSession) {
 export function getWeeklyChartData(sessions: TrainingSession[]): WeeklyChartDataPoint[] {
   return getWeekBuckets(sessions).map((bucket) => ({
     weekKey: bucket.weekKey,
+    weekStart: bucket.startDate,
+    weekEnd: bucket.endDate,
     label: bucket.weekLabel,
+    metaLabel: bucket.weekMetaLabel,
+    isCurrentWeek: bucket.isCurrentWeek,
     sessions: bucket.sessionsCount,
     durationMinutes: bucket.durationMinutes,
     totalRunMeters: bucket.totalRunExposureMeters,
@@ -204,7 +216,11 @@ export function getDisciplineDistributionData(
 export function getRunExposureChartData(sessions: TrainingSession[]): RunExposureChartPoint[] {
   return getWeeklyChartData(sessions).map((week) => ({
     weekKey: week.weekKey,
+    weekStart: week.weekStart,
+    weekEnd: week.weekEnd,
     label: week.label,
+    metaLabel: week.metaLabel,
+    isCurrentWeek: week.isCurrentWeek,
     structuredRunMeters: week.structuredRunMeters,
     mixedRunMeters: week.mixedRunMeters,
     totalRunMeters: week.totalRunMeters,

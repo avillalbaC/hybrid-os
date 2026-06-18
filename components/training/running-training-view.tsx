@@ -230,6 +230,8 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
             data={runExposureChartData.map((week) => ({
               key: week.weekKey,
               label: week.label,
+              metaLabel: week.metaLabel,
+              isCurrentWeek: week.isCurrentWeek,
               structuredRunMeters: week.structuredRunMeters,
               mixedRunMeters: week.mixedRunMeters,
             }))}
@@ -247,7 +249,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
           isLoading={isMetricsLoading}
         >
           <WeeklyBarChart
-            data={weeklySummaries.map((week) => ({ key: week.weekKey, label: week.weekKey, value: week.runMeters }))}
+            data={weeklySummaries.map((week) => ({ key: week.weekKey, label: week.weekLabel, metaLabel: week.weekMetaLabel, isCurrentWeek: week.isCurrentWeek, value: week.runMeters }))}
             compact
             formatter={(value) => formatKm(value, { forceKm: true })}
             tone="secondary"
@@ -425,7 +427,10 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
                 {weeklySummaries.map((week) => (
                   <div key={week.weekKey}>
                     <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-                      <span className="font-mono font-black text-[var(--foreground)]">{week.weekKey}</span>
+                      <span className="font-black text-[var(--foreground)]">
+                        {week.isCurrentWeek ? "Esta semana · " : ""}{week.weekLabel}
+                        <span className="ml-2 font-mono text-xs text-[var(--muted)]">{week.weekMetaLabel}</span>
+                      </span>
                       <span className="text-[var(--muted)]">
                         {formatKm(week.runMeters, { forceKm: true })} · {week.sessions} sesiones
                       </span>

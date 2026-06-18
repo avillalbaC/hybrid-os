@@ -93,6 +93,7 @@ Politica vigente:
 ### UI
 
 - `/`: Home ejecutiva corta para estado actual, Daily Plan, ultimo entrenamiento, analisis rapido, vigilancia y accesos.
+- `/calendar`: calendario mensual visual de adherencia, consistencia, disciplinas, movilidad y detalle de dia sobre sesiones reales.
 - `/dashboard`: Centro de decision del periodo actual.
 - `/analysis`: Analisis profundo con lectura actual, informes, tendencias y calidad de datos.
 - `/training`: Training Log.
@@ -182,9 +183,9 @@ Reglas que deben preservarse:
 - Endpoint dedicado para Dashboard.
 - Dashboard con periodos calendarizados y metricas agregadas.
 - Dashboard decision refactor: KPIs principales, lectura del periodo, riesgos, contexto para decision, tendencias clave y preview de informes.
-- Ruta `/analysis` para informes semanales/mensuales, tendencias completas, evidencias y calidad de datos.
+- Ruta `/analysis` como laboratorio visual de entrenamiento: resumen del periodo, carga, distribucion, running split, intensidad, musculos, tendencias, consistencia, calidad de datos e informes colapsados.
 - Post-refactor polish: tabs mobile de Analysis sin scrollbar nativa, copy de decision mas claro y mejoras priorizadas de calidad de datos.
-- Capa Visual Analytics: componentes reutilizables en `components/charts`, datasets en `lib/analytics/chart-data.ts` y graficos ligeros en Dashboard, Analysis, Running, Muscle Load y Home.
+- Capa Visual Analytics: componentes reutilizables en `components/charts`, datasets generales en `lib/analytics/chart-data.ts`, datasets especificos de Analysis en `lib/analytics/analysis-chart-data.ts` y graficos ligeros en Dashboard, Analysis, Running, Muscle Load y Home.
 - Running muestra volumen por zapatilla cuando existe `equipment.shoes`.
 - Running incorpora grafica superior "Carga semanal y carrera" con kilometros de carrera, split running/mixto y sombreado de carga no-running normalizada. El sombreado es relativo y no equivale a kilometros.
 - Running incluye contexto objetivo copiable para check diario, con senales de carrera, carga no-running y datos insuficientes.
@@ -193,6 +194,7 @@ Reglas que deben preservarse:
 - Contexto para check diario v1: capa central `lib/analytics/check-in-context.ts`, tipos en `types/check-in-context.ts`, texto completo/compacto copiable y card reutilizable en `components/check-in/check-in-context-card.tsx`.
 - Goals seguimiento: `/goals` ya no actua como planificador principal; prepara progreso, evidencia y contexto objetivo para el check diario con ChatGPT.
 - Plan semanal / Programaciones MVP: `planned_sessions` con RLS, CRUD privado, comparacion planificado vs realizado y resumen en Home, Dashboard y Analysis.
+- Calendario MVP: `/calendar` muestra vista mensual lunes-domingo, rachas, dias activos, movimiento, movilidad, distribucion por disciplina, intensidad visual y detalle de dia usando `training_sessions` y `daily_entries`.
 - Training Log, detalle, weekly, running y muscle load funcionales sobre la capa actual de sesiones.
 - BodyHeatmap actual simplificado: ranking, barras y placeholder visual en vez de muneco generado por codigo.
 
@@ -205,6 +207,7 @@ Reglas que deben preservarse:
 - Contexto para check diario: resumen objetivo y copiable disponible en Goals y Analysis, con version compacta en Dashboard y Home.
 - Running: analisis especifico de carrera. No debe repetir lectura global salvo enlace a Analysis.
 - Muscle Load: analisis especifico de carga muscular. No debe repetir informes ni lectura global salvo enlace a Analysis.
+- Calendar: vision visual de adherencia y consistencia. No debe convertirse en planificador principal ni editar sesiones o programaciones.
 
 ## Visual Analytics
 
@@ -214,7 +217,7 @@ Estado: primera capa implementada y pulida para decision.
 - `lib/analytics/chart-data.ts` normaliza datos semanales, mensuales, distribucion por disciplina, exposicion de carrera, ranking muscular y calidad de datos.
 - `components/charts/*` contiene tarjetas, barras semanales, barras apiladas de carrera, rankings horizontales, sparklines y barras de calidad.
 - Dashboard incorpora `Evolucion clave` con carrera estructurada/mixta, duracion, fatiga y peso movido.
-- Analysis incorpora graficos en Actual, Semanas, Meses, Tendencias y Calidad de datos.
+- Analysis incorpora graficos ampliados en Actual, Semanas, Meses, Tendencias y Calidad de datos: barras apiladas, scatter duracion/RPE, heatmap de consistencia, mini tendencias musculares y timeline de calidad.
 - Running incorpora carrera por semana, running estructurado, ritmo medio y zapatillas.
 - Running incorpora "Carga semanal y carrera" como grafica full-width superior: barras de km y sombreado relativo de carga no-running.
 - Muscle Load refuerza top musculos, ratios y sesiones clave sin implementar mapa corporal.

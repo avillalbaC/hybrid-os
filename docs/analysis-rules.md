@@ -17,6 +17,7 @@ Documento operativo para mantener la capa de analisis determinista. No describe 
 5. Visualizaciones: graficos ligeros que muestran los datos antes de la explicacion.
    - los insights explican los graficos; no sustituyen graficos.
    - cada grafico importante debe mostrar unidad, valor actual y referencia compacta cuando exista.
+   - las semanas deben mostrarse con rangos humanos de fechas como label principal; `W25` queda solo como meta tecnica o tooltip.
 6. Contexto de objetivo: cuando existe objetivo activo, las lecturas comparan metricas contra targets del bloque.
    - sin objetivo activo, la lectura debe ser descriptiva y evitar recomendaciones demasiado prescriptivas;
    - con objetivo activo, la lectura puede marcar desviaciones de minimos, maximos y senales a vigilar.
@@ -135,14 +136,20 @@ Dashboard:
 Analysis:
 
 - Analisis completo.
+- Laboratorio visual y contexto historico; no es Home, Dashboard, Goals, Running ni Muscle Load.
+- Debe mostrar datos, tendencias, senales objetivas y contexto util para el check diario.
+- No debe actuar como entrenador ni decidir que hacer hoy.
+- Cada grafica debe responder una pregunta concreta.
 - Debe priorizar graficos y usar insights como interpretacion de esos datos.
 - Todos los insights agrupados.
 - Informes semanales y mensuales colapsados por defecto.
-- Tendencias completas agrupadas por volumen, carrera, carga, fuerza, intensidad y muscular.
+- Tendencias completas agrupadas por volumen, carrera, carga, fuerza, intensidad, muscular, consistencia y calidad de datos.
 - Cada bloque de tendencias debe tener descripcion corta y evitar cards solitarias estiradas innecesariamente.
 - Calidad de datos historica e informativa.
 - Calidad de datos debe proponer maximo 3 mejoras de registro; no pedir completar todo el historico.
 - Calidad de datos debe explicar el impacto de cada falta principal: resultado, RPE, duracion, partial y zapatillas.
+- El lenguaje visible debe ser descriptivo: senal, dato relevante, contexto, tendencia, dato insuficiente.
+- Evitar lenguaje prescriptivo de entrenamiento en Analysis: haz, evita, prioriza, deberias, decision recomendada.
 - No persiste informes ni toca Supabase.
 - En Actual debe mostrar contexto de objetivo: evaluacion global, principales senales y enlace a `/goals`.
 - En Actual debe mostrar contexto para check diario con boton de copiar.

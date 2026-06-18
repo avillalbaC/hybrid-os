@@ -10,8 +10,10 @@ export type NonRunningLoadLabel = "baja" | "moderada" | "alta" | "muy alta";
 export type WeeklyRunningLoadDatum = {
   weekKey: string;
   weekLabel: string;
+  weekMetaLabel: string;
   weekStart: string;
   weekEnd: string;
+  isCurrentWeek: boolean;
   totalRunKm: number;
   structuredRunKm: number;
   mixedRunKm: number;
@@ -108,8 +110,10 @@ export function getWeeklyRunningLoadData(sessions: TrainingSession[], visibleWee
     return {
       weekKey: bucket.weekKey,
       weekLabel: bucket.weekLabel,
+      weekMetaLabel: bucket.weekMetaLabel,
       weekStart: bucket.startDate,
       weekEnd: bucket.endDate,
+      isCurrentWeek: bucket.isCurrentWeek,
       totalRunKm: round(bucket.totalRunExposureMeters / 1000),
       structuredRunKm: round(bucket.structuredRunMeters / 1000),
       mixedRunKm: round(bucket.mixedRunMeters / 1000),
@@ -223,7 +227,7 @@ export function buildRunningObjectiveContext(sessions: TrainingSession[], weekly
     "CONTEXTO RUNNING HYBRID OS",
     "",
     "Periodo:",
-    `Semana actual (${current.weekLabel})`,
+    `${current.isCurrentWeek ? "Esta semana" : "Semana visible"} (${current.weekLabel} · ${current.weekMetaLabel})`,
     "",
     "Carrera:",
     `* Carrera total: ${formatKmValue(current.totalRunKm)}`,

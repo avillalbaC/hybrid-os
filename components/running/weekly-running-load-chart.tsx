@@ -91,7 +91,7 @@ export function WeeklyRunningLoadChart({
                 const mixedHeight = week.totalRunKm > 0 ? (week.mixedRunKm / week.totalRunKm) * 100 : 0;
                 const shadeHeight = Math.round(week.nonRunningLoadNormalized * 100);
                 const tooltip = [
-                  `${week.weekLabel}`,
+                  `${week.isCurrentWeek ? "Esta semana · " : ""}${week.weekLabel} · ${week.weekMetaLabel}`,
                   `Carrera total: ${formatKm(week.totalRunKm)}`,
                   `Running estructurado: ${formatKm(week.structuredRunKm)}`,
                   `Carrera mixta: ${formatKm(week.mixedRunKm)}`,
@@ -110,7 +110,7 @@ export function WeeklyRunningLoadChart({
                     />
                     <div className="relative flex h-full w-full items-end justify-center">
                       <div
-                        className="flex w-full max-w-12 flex-col-reverse overflow-hidden rounded-sm border border-[rgba(34,211,238,0.18)] bg-[rgba(34,211,238,0.08)] shadow-[0_0_26px_rgba(34,211,238,0.12)]"
+                        className={`flex w-full max-w-12 flex-col-reverse overflow-hidden rounded-sm border bg-[rgba(34,211,238,0.08)] shadow-[0_0_26px_rgba(34,211,238,0.12)] ${week.isCurrentWeek ? "border-[var(--accent-border-strong)] ring-1 ring-[var(--accent)]" : "border-[rgba(34,211,238,0.18)]"}`}
                         style={{ height: `${totalHeight}%` }}
                         title={tooltip}
                         aria-label={tooltip}
@@ -119,8 +119,8 @@ export function WeeklyRunningLoadChart({
                         <span className="block bg-[rgba(45,212,191,0.58)]" style={{ height: `${mixedHeight}%` }} />
                       </div>
                     </div>
-                    <span className="absolute bottom-0 w-full truncate text-center font-mono text-[0.62rem] font-bold text-[var(--muted)]">
-                      {week.weekKey.replace(/^.*-W/, "W")}
+                    <span className={`absolute bottom-0 w-full truncate text-center text-[0.62rem] font-bold ${week.isCurrentWeek ? "text-[var(--accent-strong)]" : "text-[var(--muted)]"}`}>
+                      {week.weekLabel}
                     </span>
                   </div>
                 );

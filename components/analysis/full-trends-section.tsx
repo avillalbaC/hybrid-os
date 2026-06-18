@@ -1,10 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { CalendarHeatmap } from "@/components/charts/calendar-heatmap";
+import { ChartCard } from "@/components/charts/chart-card";
+import { LineTrendCard } from "@/components/charts/line-trend-card";
+import { StackedWeeklyBars } from "@/components/charts/stacked-weekly-bars";
 import { TrendCardChart } from "@/components/charts/trend-card-chart";
 import { Card } from "@/components/ui/card";
 import { SkeletonBlock } from "@/components/ui/skeleton";
+import {
+  buildDataQualityTimelineData,
+  buildMuscleTrendData,
+  buildTrainingConsistencyData,
+} from "@/lib/analytics/analysis-chart-data";
 import type { TrendMetric, WeeklyTrendMetrics } from "@/lib/analytics/trends";
+import type { TrainingSession } from "@/types/training";
 
 function TrendGroup({
   description,
@@ -46,15 +56,20 @@ function TrendGroup({
 
 export function FullTrendsSection({
   isLoading,
+  sessions,
   trends,
 }: {
   isLoading?: boolean;
+  sessions: TrainingSession[];
   trends: WeeklyTrendMetrics;
 }) {
+  const muscleTrends = buildMuscleTrendData(sessions).slice(0, 8);
+  const consistencyData = buildTrainingConsistencyData(sessions, 84);
+  const qualityTimeline = buildDataQualityTimelineData(sessions).slice(-8);
   const groups = [
     { title: "Volumen", description: "Tiempo y frecuencia para leer si el bloque acumula o descarga.", metrics: [trends.duration] },
     { title: "Carrera", description: "Exposición total separando running técnico de carrera mixta.", metrics: [trends.runExposure.total, trends.runExposure.structured, trends.runExposure.mixed] },
-    { title: "Carga", description: "Fatiga, impacto y cargas por estímulo para decidir recuperación.", metrics: [trends.load, trends.impact, trends.cardioLoad, trends.technicalLoad] },
+    { title: "Carga", description: "Fatiga, impacto y cargas por estímulo para interpretar acumulación.", metrics: [trends.load, trends.impact, trends.cardioLoad, trends.technicalLoad] },
     { title: "Fuerza", description: "Peso movido y carga de fuerza para ver si el bloque sostiene estímulo pesado.", metrics: [trends.externalLoad, trends.strengthLoad] },
     { title: "Intensidad", description: "RPE medio como señal de dureza percibida.", metrics: [trends.averageRpe] },
     { title: "Muscular", description: "Carga muscular total para detectar concentración acumulada.", metrics: [trends.muscleLoad] },
@@ -83,6 +98,46 @@ export function FullTrendsSection({
           {groups.map((group) => (
             <TrendGroup key={group.title} title={group.title} description={group.description} metrics={group.metrics} />
           ))}
+          <section>
+            <div className="mb-3">
+              <h3 className="text-xl font-black tracking-tight">Músculos principales</h3>
+              <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Mini líneas de las últimas semanas para ver qué cargas locales suben o bajan.</p>
+            </div>
+            {muscleTrends.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {muscleTrends.map((muscle) => (
+                  <LineTrendCard
+                    key={muscle.muscle}
+                    label={muscle.label}
+                    value={`${Math.round(muscle.totalLoad)} pts`}
+                    data={muscle.points}
+                  />
+                ))}
+              </div>
+            ) : (
+              <Card>
+                <p className="text-sm leading-6 text-[var(--muted)]">Sin carga muscular suficiente para tendencias.</p>
+              </Card>
+            )}
+          </section>
+          <section className="grid gap-5 xl:grid-cols-2">
+            <ChartCard
+              title="Consistencia"
+              description="Últimas 12 semanas por día con intensidad visual según sesiones, duración y fatiga."
+              unit="días"
+              footer="Dato útil para distinguir continuidad real de semanas con sesiones concentradas."
+            >
+              <CalendarHeatmap data={consistencyData} />
+            </ChartCard>
+            <ChartCard
+              title="Calidad de datos semanal"
+              description="Completas, parciales y principales faltantes por semana."
+              unit="sesiones"
+              footer="La tendencia de calidad indica qué semanas son más comparables."
+            >
+              <StackedWeeklyBars data={qualityTimeline} formatter={(value) => `${Math.round(value)}`} />
+            </ChartCard>
+          </section>
         </div>
       )}
     </section>

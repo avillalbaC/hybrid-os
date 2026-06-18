@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { formatRelativeWeekLabel, formatWeekMetaLabel, getCurrentWeekStartLocal, getWeekKeyForDate, getWeekStartDateKey } from "@/lib/date/week-labels";
 import { dashboardPeriods, filterSessionsByPeriod, type DashboardPeriod } from "@/lib/domain/dashboard/periods";
 import { getSessionRunMeters, getTotalRunExposureMeters } from "@/lib/domain/training/run-exposure";
 import { getSecondaryActivityKind, isSecondaryActivity } from "@/lib/domain/training/secondary-activity";
@@ -128,23 +129,11 @@ function formatGroupDate(date: string) {
   }).format(new Date(`${date}T00:00:00`));
 }
 
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
 function getWeekInfo(date: string) {
-  const current = new Date(`${date}T00:00:00`);
-  const day = current.getDay() || 7;
-  const monday = addDays(current, 1 - day);
-  const sunday = addDays(monday, 6);
-  const thursday = addDays(monday, 3);
-  const yearStart = new Date(thursday.getFullYear(), 0, 1);
-  const week = Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  const rangeFormatter = new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short" });
+  const weekStart = getWeekStartDateKey(date);
+  const weekKey = getWeekKeyForDate(date);
 
-  return `Semana ${week} · ${rangeFormatter.format(monday)}-${rangeFormatter.format(sunday)}`;
+  return `${formatRelativeWeekLabel(weekStart, getCurrentWeekStartLocal())} · ${formatWeekMetaLabel(weekKey)}`;
 }
 
 function getAverageRpeSummary(sessions: TrainingSession[]) {

@@ -8,6 +8,7 @@ const navSections = [
     label: "Principal",
     items: [
       { href: "/", label: "Home", marker: "O" },
+      { href: "/calendar", label: "Calendario", marker: "C" },
       { href: "/dashboard", label: "Dashboard", marker: "A" },
       { href: "/analysis", label: "Análisis", marker: "A" },
       { href: "/goals", label: "Objetivos", marker: "G" },
@@ -19,7 +20,7 @@ const navSections = [
       { href: "/training", label: "Training Log", marker: "L" },
       { href: "/training/import", label: "Importar JSON", marker: "+" },
       { href: "/training/running", label: "Running", marker: "R" },
-      { href: "/muscle-load", label: "Carga muscular", marker: "C" },
+      { href: "/muscle-load", label: "Carga muscular", marker: "M" },
     ],
   },
   {

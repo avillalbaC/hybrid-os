@@ -1,3 +1,4 @@
+import { formatRelativeWeekLabel, getCurrentWeekStartLocal, getWeekStartDateKey } from "@/lib/date/week-labels";
 import { getPeriodRange, isDateInRange } from "@/lib/domain/dashboard/periods";
 import { getStructuredRunningMeters, getTotalRunExposureMeters } from "@/lib/domain/training/run-exposure";
 import { formatMuscleName } from "@/lib/utils/format";
@@ -30,14 +31,6 @@ const metricLabels: Record<keyof NonNullable<GoalBlock["targets"]["weekly"]>, st
   totalDurationMinutes: "Duración total",
 };
 
-function formatDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
 function getWeekLabel(referenceDate: Date) {
   const range = getPeriodRange("week", referenceDate);
 
@@ -45,7 +38,7 @@ function getWeekLabel(referenceDate: Date) {
     return "Semana actual";
   }
 
-  return `${formatDateKey(range.start)} - ${formatDateKey(range.end)}`;
+  return formatRelativeWeekLabel(getWeekStartDateKey(range.start), getCurrentWeekStartLocal());
 }
 
 function getWeekSessions(sessions: TrainingSession[], referenceDate: Date) {

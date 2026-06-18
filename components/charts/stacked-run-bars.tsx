@@ -3,6 +3,8 @@ import { hasChartData } from "@/components/charts/chart-utils";
 export type StackedRunPoint = {
   key: string;
   label: string;
+  metaLabel?: string;
+  isCurrentWeek?: boolean;
   structuredRunMeters: number;
   mixedRunMeters: number;
 };
@@ -38,18 +40,21 @@ export function StackedRunBars({
           const height = Math.max(8, Math.round((total / maxValue) * 100));
           const structuredPercent = total > 0 ? (item.structuredRunMeters / total) * 100 : 0;
           const mixedPercent = 100 - structuredPercent;
+          const title = `${item.isCurrentWeek ? "Esta semana · " : ""}${item.label}${item.metaLabel ? ` · ${item.metaLabel}` : ""}: ${formatter(total)} · ${formatter(item.structuredRunMeters)} running · ${formatter(item.mixedRunMeters)} mixto`;
 
           return (
             <div key={item.key} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2">
               <div
-                className="flex w-full max-w-10 flex-col-reverse overflow-hidden rounded-sm border border-[rgba(244,247,244,0.1)] bg-[rgba(244,247,244,0.05)]"
+                className={`flex w-full max-w-10 flex-col-reverse overflow-hidden rounded-sm border bg-[rgba(244,247,244,0.05)] ${item.isCurrentWeek ? "border-[var(--accent-border-strong)] ring-1 ring-[var(--accent)]" : "border-[rgba(244,247,244,0.1)]"}`}
                 style={{ height: `${height}%` }}
-                title={`${item.label}: ${formatter(total)} · ${formatter(item.structuredRunMeters)} running · ${formatter(item.mixedRunMeters)} mixto`}
+                title={title}
               >
                 <span className="block bg-[linear-gradient(180deg,var(--accent),var(--accent-strong))]" style={{ height: `${structuredPercent}%` }} />
                 <span className="block bg-[rgba(240,196,107,0.78)]" style={{ height: `${mixedPercent}%` }} />
               </div>
-              <span className="w-full truncate text-center font-mono text-[0.62rem] font-bold text-[var(--muted)]">{item.key.replace(/^.*-W/, "W")}</span>
+              <span className={`w-full truncate text-center text-[0.62rem] font-bold ${item.isCurrentWeek ? "text-[var(--accent-strong)]" : "text-[var(--muted)]"}`}>
+                {item.label}
+              </span>
             </div>
           );
         })}

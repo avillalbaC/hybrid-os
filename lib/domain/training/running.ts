@@ -1,7 +1,7 @@
 import { getPeriodRange, getPreviousPeriodRange, isDateInRange } from "@/lib/domain/dashboard/periods";
+import { formatWeekMetaLabel, formatWeekRangeLabel, getWeekDateRange, getWeekKeyForDate, getWeekStartDateKey, isCurrentWeekStart } from "@/lib/date/week-labels";
 import { getSessionRunMeters } from "@/lib/domain/training/run-exposure";
 import { isPureRunningSession } from "@/lib/domain/training/session-kind";
-import { getWeekKey } from "@/lib/selectors/training";
 import type { TrainingSession } from "@/types/training";
 
 export type RunningContext = "pure" | "hyrox-crossfit" | "mixed";
@@ -24,6 +24,11 @@ export type RunningPeriodStats = {
 
 export type RunningWeekSummary = {
   weekKey: string;
+  weekStart: string;
+  weekEnd: string;
+  weekLabel: string;
+  weekMetaLabel: string;
+  isCurrentWeek: boolean;
   runMeters: number;
   sessions: number;
 };
@@ -156,15 +161,26 @@ export function getCurrentRunningPeriods(rows: RunningSessionRow[], today: Date 
 
 export function groupRunningByCalendarWeek(rows: RunningSessionRow[], limit = 10): RunningWeekSummary[] {
   const summaries = rows.reduce<Record<string, RunningWeekSummary>>((weeks, row) => {
-    const weekKey = getWeekKey(row.session.date);
-    weeks[weekKey] = weeks[weekKey] ?? { weekKey, runMeters: 0, sessions: 0 };
+    const weekStart = getWeekStartDateKey(row.session.date);
+    const weekKey = getWeekKeyForDate(row.session.date);
+    const range = getWeekDateRange(weekStart);
+    weeks[weekKey] = weeks[weekKey] ?? {
+      weekKey,
+      weekStart: range.startDate,
+      weekEnd: range.endDate,
+      weekLabel: formatWeekRangeLabel(weekStart),
+      weekMetaLabel: formatWeekMetaLabel(weekKey),
+      isCurrentWeek: isCurrentWeekStart(weekStart),
+      runMeters: 0,
+      sessions: 0,
+    };
     weeks[weekKey].runMeters += row.runMeters;
     weeks[weekKey].sessions += 1;
     return weeks;
   }, {});
 
   return Object.values(summaries)
-    .sort((a, b) => b.weekKey.localeCompare(a.weekKey))
+    .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
     .slice(0, limit)
     .reverse();
 }

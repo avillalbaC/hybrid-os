@@ -3,6 +3,7 @@ import {
   buildCheckInContextText,
   buildCompactCheckInContextText,
 } from "@/lib/analytics/check-in-context";
+import { formatRelativeWeekLabel, getCurrentWeekStartLocal, getWeekStartDateKey } from "@/lib/date/week-labels";
 import { getPeriodRange, isDateInRange } from "@/lib/domain/dashboard/periods";
 import { getStructuredRunningMeters, getTotalRunExposureMeters } from "@/lib/domain/training/run-exposure";
 import { getGoalProfileMeta } from "@/lib/goals/goal-profiles";
@@ -56,7 +57,7 @@ function getWeekLabel(referenceDate: Date) {
     return "Semana actual";
   }
 
-  return `${formatDateKey(range.start)} - ${formatDateKey(range.end)}`;
+  return formatRelativeWeekLabel(getWeekStartDateKey(range.start), getCurrentWeekStartLocal());
 }
 
 function getWeekRange(referenceDate: Date) {

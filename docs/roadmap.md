@@ -28,10 +28,12 @@ Este roadmap mantiene el foco en datos reales, claridad de analisis y cambios pe
 - Dashboard como centro de decision del periodo.
 - `/analysis` como vista profunda de informes, tendencias y calidad de datos.
 - Visual Analytics ligera sin libreria externa de charts.
+- Mejora visual de `/analysis`: laboratorio visual con mas graficas utiles, datasets especificos, scatter duracion/RPE, barras apiladas, heatmap de consistencia, tendencias musculares y timeline de calidad de datos.
 - Daily Plan en Home con `daily_entries`, prioridades, movilidad, posponer y revision de pendientes de ayer.
 - Objetivos activos MVP con `goal_blocks`, perfiles, evaluacion semanal y contexto copiable.
 - Contexto para check diario v1 centralizado, con texto completo/compacto, boton de copia e integracion en Goals, Analysis, Dashboard y Home.
 - Plan semanal beta con `planned_sessions`, CRUD privado y comparacion planificado vs realizado.
+- Calendario MVP en `/calendar` como vista mensual de adherencia, rachas, movimiento, disciplinas e intensidad visual sobre datos reales.
 - Training Log, detalle, weekly, running y muscle load sobre la capa actual de sesiones.
 
 ## Prioridad actual
@@ -41,9 +43,11 @@ Este roadmap mantiene el foco en datos reales, claridad de analisis y cambios pe
 3. QA de Goals, Daily Plan y Plan semanal con uso real durante varios dias.
 4. Crear `/daily` para historico y edicion semanal de entradas diarias.
 5. Mejorar loading, empty y error states en pantallas prioritarias.
-6. Auditar responsive/mobile de Home, Dashboard, Analysis, Training, Running, Muscle Load e Import.
-7. Mejorar feedback del importador donde siga habiendo friccion real.
-8. Ampliar `HybridOSAppInput` v1.1 solo si hay uso real de campos nuevos.
+6. Auditar responsive/mobile de Home, Dashboard, Training, Running, Muscle Load e Import.
+7. Calibrar `/analysis` durante varios checks diarios y anotar que graficas aportan mejor contexto.
+8. Mejorar feedback del importador donde siga habiendo friccion real.
+9. Usar `/calendar` varios dias para validar si aumenta adherencia antes de anadir planificado vs realizado o gamificacion avanzada.
+10. Ampliar `HybridOSAppInput` v1.1 solo si hay uso real de campos nuevos.
 
 ## Backlog cercano
 

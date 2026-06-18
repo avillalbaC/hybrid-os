@@ -21,7 +21,13 @@ Primera capa visual de analitica para pasar de lectura textual a graficos + insi
 - `components/charts/discipline-distribution-chart.tsx`: distribucion de disciplinas sobre ranking horizontal.
 - `components/charts/data-quality-bars.tsx`: completitud de RPE, duracion, resultado y estado complete/partial.
 - `components/charts/trend-card-chart.tsx`: tarjeta visual de tendencia con metrica, referencia, barras e insight.
+- `components/charts/stacked-weekly-bars.tsx`: barras apiladas genericas para semanas o meses, usadas en disciplinas, intensidad, running split y calidad.
+- `components/charts/scatter-card.tsx`: scatter SVG simple para duracion vs RPE.
+- `components/charts/calendar-heatmap.tsx`: matriz diaria responsive para consistencia de registro.
+- `components/charts/line-trend-card.tsx`: mini linea para evolucion muscular.
+- `components/charts/metric-comparison-card.tsx`: tarjeta compacta de metrica actual y referencia.
 - `components/charts/chart-utils.ts`: utilidades de porcentajes, tonos y paths SVG.
+- `components/calendar/*`: calendario mensual de adherencia con grid lunes-domingo, badges por disciplina, intensidad visual y detalle de dia.
 
 ## Datasets
 
@@ -41,6 +47,18 @@ La capa reutiliza:
 - `calculateMuscleSummary` y `getTopMuscles` de `lib/domain/training/muscle-load.ts`.
 - `filterSessionsByPeriod` de `lib/domain/dashboard/periods.ts`.
 
+`lib/analytics/analysis-chart-data.ts` anade datasets especificos para `/analysis`:
+
+- carga semanal y mensual;
+- distribucion de disciplinas semanal/mensual;
+- running estructurado vs carrera mixta semanal/mensual;
+- intensidad por RPE semanal/mensual;
+- scatter de duracion vs RPE;
+- ranking y tendencia muscular;
+- consistencia diaria;
+- calidad de datos por semana/mes;
+- resumen visual del periodo.
+
 ## Uso por pantalla
 
 Dashboard:
@@ -52,13 +70,11 @@ Dashboard:
 
 Analysis:
 
-- Actual: evolucion semanal, distribucion por disciplina, carrera estructurada/mixta y top musculos.
-- Semanas: resumen visual semanal antes de informes y mini graficos dentro de cada informe.
-- Meses: sesiones, horas, carrera y peso movido por mes.
-- Tendencias: tarjetas visuales reutilizables por bloque.
-- Tendencias: bloques con descripcion corta y ancho razonable cuando hay una o dos cards.
-- Calidad de datos: barras de completitud y ranking de pending fields.
-- Calidad de datos: mejoras de registro e impacto de datos faltantes.
+- Actual: resumen visual del periodo, carga semanal, distribucion, running split, intensidad, duracion vs RPE, top musculos y contexto copiable.
+- Semanas: evolucion semanal, distribucion por disciplina, intensidad, consistencia e informes colapsados.
+- Meses: volumen mensual, running mensual, distribucion mensual, intensidad mensual, top musculos e informes colapsados.
+- Tendencias: tarjetas por bloque, mini tendencias musculares, consistencia y calidad semanal.
+- Calidad de datos: completitud, pending fields, timeline de calidad, mejoras de registro e impacto de faltantes.
 
 Running:
 
@@ -86,6 +102,13 @@ Home:
 - Solo mini sparklines en KPIs del hero.
 - No se anadieron graficos grandes.
 
+Calendar:
+
+- Vista mensual como visualizacion de consistencia y adherencia.
+- Usa `training_sessions` como fuente principal y `daily_entries` para movilidad/contexto del dia.
+- Muestra intensidad diaria como clasificacion simple, no como prescripcion.
+- No muestra planificado vs realizado en el MVP.
+
 ## Reglas visuales
 
 - Fondo oscuro y estetica premium existente.
@@ -95,6 +118,8 @@ Home:
 - No hay scroll horizontal nativo en las rutas revisadas.
 - Cada grafico debe tener titulo, descripcion, unidad visible e insight o footer cuando aporte contexto.
 - Los graficos importantes deben mostrar valor actual, media reciente/cambio y estado cuando esa referencia exista.
+- Las graficas semanales deben usar rangos humanos como label principal (`15-21 jun`) y dejar `W25` o `2026-W25` solo como meta, badge o tooltip.
+- La semana actual debe poder identificarse con un marcador sutil, sin colores agresivos.
 
 ## Integracion con objetivos y plan semanal
 

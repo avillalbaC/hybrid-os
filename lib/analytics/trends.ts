@@ -4,6 +4,7 @@ import {
   parseDashboardDate,
   startOfWeek,
 } from "@/lib/domain/dashboard/periods";
+import { formatWeekMetaLabel, formatWeekRangeLabel, isCurrentWeekStart } from "@/lib/date/week-labels";
 import { getSessionRunMeters } from "@/lib/domain/training/run-exposure";
 import { isPureRunningSession } from "@/lib/domain/training/session-kind";
 import { getWeekKey as getIsoWeekKey, muscleNames } from "@/lib/selectors/training";
@@ -38,8 +39,10 @@ export type WeeklyTrendMetricKey =
 export type WeeklyTrendBucket = {
   weekKey: string;
   weekLabel: string;
+  weekMetaLabel: string;
   startDate: string;
   endDate: string;
+  isCurrentWeek: boolean;
   sessions: TrainingSession[];
   sessionsCount: number;
   completedSessionsCount: number;
@@ -83,6 +86,8 @@ export type WeeklyTrendBucket = {
 export type TrendWeeklyValue = {
   weekKey: string;
   label: string;
+  metaLabel: string;
+  isCurrentWeek: boolean;
   value: number;
 };
 
@@ -207,10 +212,7 @@ export function getWeekKey(date: string | Date) {
 }
 
 export function getWeekLabel(date: string | Date) {
-  const start = getWeekStart(date);
-  const end = getWeekEnd(date);
-
-  return `${start.getDate().toString().padStart(2, "0")}/${(start.getMonth() + 1).toString().padStart(2, "0")} - ${end.getDate().toString().padStart(2, "0")}/${(end.getMonth() + 1).toString().padStart(2, "0")}`;
+  return formatWeekRangeLabel(formatDateKey(getWeekStart(date)));
 }
 
 export function getStructuredRunningMeters(session: TrainingSession) {
@@ -227,12 +229,16 @@ export function getTotalRunExposureMeters(session: TrainingSession) {
 
 function makeEmptyBucket(start: Date): WeeklyTrendBucket {
   const end = addDays(start, 6);
+  const startDate = formatDateKey(start);
+  const weekKey = getWeekKey(start);
 
   return {
-    weekKey: getWeekKey(start),
-    weekLabel: getWeekLabel(start),
-    startDate: formatDateKey(start),
+    weekKey,
+    weekLabel: formatWeekRangeLabel(startDate),
+    weekMetaLabel: formatWeekMetaLabel(weekKey),
+    startDate,
     endDate: formatDateKey(end),
+    isCurrentWeek: isCurrentWeekStart(startDate),
     sessions: [],
     sessionsCount: 0,
     completedSessionsCount: 0,
@@ -541,6 +547,8 @@ function buildTrendMetric({
   const weeklySeries = buckets.slice(-8).map((bucket) => ({
     weekKey: bucket.weekKey,
     label: bucket.weekLabel,
+    metaLabel: bucket.weekMetaLabel,
+    isCurrentWeek: bucket.isCurrentWeek,
     value: roundValue(getMetricValue(bucket, key)),
   }));
 

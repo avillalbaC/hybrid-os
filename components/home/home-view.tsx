@@ -1,17 +1,21 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { QuickDataInsightCard } from "@/components/analytics/data-insights-panel";
 import { CheckInContextCard } from "@/components/check-in/check-in-context-card";
 import { MetricSparkline } from "@/components/charts/metric-sparkline";
 import { DailyPlanCard } from "@/components/home/daily-plan-card";
+import { WeeklyCalendarPreview } from "@/components/home/weekly-calendar-preview";
 import { WeeklyPlanCard } from "@/components/planning/weekly-plan-card";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
+import { buildCalendarMonthData } from "@/lib/analytics/calendar-data";
 import { getTrainingDataInsights } from "@/lib/analytics/data-insights";
 import { getWeeklyChartData } from "@/lib/analytics/chart-data";
+import { getLocalDateKey, getMonthStart } from "@/lib/date/local-date";
+import { formatWeekRangeLabel, getCurrentWeekStartLocal, getWeekDateRange } from "@/lib/date/week-labels";
 import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
 import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
 import { getSessionRunMeters, getTotalRunExposureMeters } from "@/lib/domain/training/run-exposure";
@@ -20,6 +24,7 @@ import { useWeeklyPlanning } from "@/lib/planning/use-weekly-planning";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
 import { formatDataQuality, formatDate, formatDuration, formatKm, formatRpe, formatTrainingType } from "@/lib/utils/format";
 import type { BodyCheck } from "@/types/body";
+import type { DailyEntry } from "@/types/daily";
 import type { NutritionCheck } from "@/types/nutrition";
 import type { MuscleName, TrainingSession } from "@/types/training";
 
@@ -39,11 +44,16 @@ type NextAction = {
 
 const quickLinks = [
   { href: "/training/import", label: "Importar entrenamiento", detail: "Añadir nueva sesión" },
+  { href: "/calendar", label: "Calendario", detail: "Adherencia semanal y mensual" },
   { href: "/training", label: "Ver log", detail: "Historial y filtros" },
   { href: "/training/running", label: "Carrera", detail: "Running estructurado y mixto" },
   { href: "/muscle-load", label: "Carga muscular", detail: "Top músculos y patrones" },
   { href: "/dashboard", label: "Dashboard", detail: "Análisis completo por periodo" },
 ];
+
+type DailyEntriesRangeResponse = {
+  entries?: DailyEntry[];
+};
 
 function PrimaryAction({
   href,
@@ -456,6 +466,12 @@ export function HomeView({
   bodyChecks: BodyCheck[];
   nutritionChecks: NutritionCheck[];
 }) {
+  const todayDate = getLocalDateKey();
+  const weekStart = getCurrentWeekStartLocal();
+  const weekRange = getWeekDateRange(weekStart);
+  const [weeklyDailyEntries, setWeeklyDailyEntries] = useState<DailyEntry[]>([]);
+  const [weeklyDailyEntriesError, setWeeklyDailyEntriesError] = useState<string | null>(null);
+  const [weeklyDailyEntriesLoading, setWeeklyDailyEntriesLoading] = useState(false);
   const { sessions: combinedSessions, pendingSessions, source, syncMessage, isLoading, isReady } = useTrainingSessions(sessions);
   const weeklyPlanning = useWeeklyPlanning();
   const goalContext = useActiveGoalEvaluation(combinedSessions, {
@@ -494,6 +510,58 @@ export function HomeView({
     : weeklyReading;
   const goalPositiveSignal = goalContext.progress.positiveSignals[0]?.evidence ?? null;
   const goalNegativeSignal = goalContext.progress.negativeSignals[0]?.evidence ?? null;
+  const weeklyCalendarData = useMemo(
+    () => buildCalendarMonthData({
+      sessions: combinedSessions,
+      dailyEntries: weeklyDailyEntries,
+      monthDate: getMonthStart(todayDate),
+      selectedDate: todayDate,
+      todayDate,
+    }),
+    [combinedSessions, todayDate, weeklyDailyEntries],
+  );
+  const weeklyCalendarDays = useMemo(
+    () => weeklyCalendarData.days.filter((day) => day.date >= weekRange.startDate && day.date <= weekRange.endDate),
+    [weekRange.endDate, weekRange.startDate, weeklyCalendarData.days],
+  );
+
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    async function loadWeeklyDailyEntries() {
+      setWeeklyDailyEntriesLoading(true);
+      setWeeklyDailyEntriesError(null);
+
+      try {
+        const response = await fetch(`/api/daily-entry/range?start=${weekRange.startDate}&end=${weekRange.endDate}`, {
+          cache: "no-store",
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error("No se pudo cargar movilidad semanal.");
+        }
+
+        const payload = (await response.json()) as DailyEntriesRangeResponse;
+        setWeeklyDailyEntries(Array.isArray(payload.entries) ? payload.entries : []);
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setWeeklyDailyEntries([]);
+        setWeeklyDailyEntriesError(error instanceof Error ? error.message : "No se pudo cargar movilidad semanal.");
+      } finally {
+        if (!abortController.signal.aborted) {
+          setWeeklyDailyEntriesLoading(false);
+        }
+      }
+    }
+
+    void loadWeeklyDailyEntries();
+
+    return () => abortController.abort();
+  }, [weekRange.endDate, weekRange.startDate]);
 
   return (
     <>
@@ -548,6 +616,12 @@ export function HomeView({
 
       <div className="flex flex-col gap-6">
         <DailyPlanCard />
+        <WeeklyCalendarPreview
+          days={weeklyCalendarDays}
+          weekLabel={formatWeekRangeLabel(weekStart)}
+          isLoading={isMetricsLoading || weeklyDailyEntriesLoading}
+          dailyEntriesError={weeklyDailyEntriesError}
+        />
         <HomeGoalContextCard
           title={goalContext.activeGoal?.title ?? null}
           summary={goalContext.progress.summary}

@@ -1,8 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { ChartCard } from "@/components/charts/chart-card";
 import { DataQualityBars } from "@/components/charts/data-quality-bars";
 import { HorizontalRankingChart } from "@/components/charts/horizontal-ranking-chart";
+import { StackedWeeklyBars } from "@/components/charts/stacked-weekly-bars";
 import { SkeletonBlock } from "@/components/ui/skeleton";
+import { buildDataQualityTimelineData } from "@/lib/analytics/analysis-chart-data";
 import { getDataQualityChartData } from "@/lib/analytics/chart-data";
 import type { TrainingSession } from "@/types/training";
 
@@ -74,23 +77,23 @@ function getDataQualityActions(metrics: DataQualityMetrics) {
     .join(", ");
 
   if (metrics.sessionsWithoutResult > 0) {
-    actions.push("Completar resultados exactos en las sesiones clave o de mayor carga.");
+    actions.push("Registrar resultados exactos en sesiones clave mejora la comparabilidad histórica.");
   }
 
   if (metrics.runningWithoutShoes > 0) {
-    actions.push("Añadir zapatillas en sesiones running para mejorar contexto de carrera.");
+    actions.push("Zapatillas en sesiones running aportan contexto de volumen por modelo.");
   }
 
   if (pendingText) {
-    actions.push(`Reducir pendingFields que afectan comparativas: ${pendingText}.`);
+    actions.push(`PendingFields con mayor impacto en comparativas: ${pendingText}.`);
   }
 
   if (actions.length < 3 && metrics.sessionsWithoutRpe > 0) {
-    actions.push("RPE en sesiones recientes aporta más contexto que completar todo el histórico.");
+    actions.push("RPE en sesiones recientes aporta más lectura de intensidad que completar todo el histórico.");
   }
 
   if (actions.length === 0) {
-    actions.push("El registro actual es suficiente; las sesiones nuevas de alta carga son las más relevantes.");
+    actions.push("El registro actual tiene cobertura suficiente; las sesiones nuevas de alta carga son el dato más relevante.");
   }
 
   return actions.slice(0, 3);
@@ -155,6 +158,7 @@ export function DataQualitySection({
 }) {
   const metrics = getDataQualityMetrics(sessions);
   const chartData = getDataQualityChartData(sessions);
+  const qualityTimeline = buildDataQualityTimelineData(sessions).slice(-8);
   const quality = getQualityLabel(metrics);
   const qualityActions = getDataQualityActions(metrics);
   const qualityImpacts = getDataQualityImpacts(metrics);
@@ -205,6 +209,15 @@ export function DataQualitySection({
             </Card>
           </div>
 
+          <ChartCard
+            title="Timeline de calidad"
+            description="Completas, partial y principales faltantes por semana."
+            unit="sesiones"
+            footer="Las semanas con más faltantes tienen menor fiabilidad para comparar carga, intensidad y rendimiento."
+          >
+            <StackedWeeklyBars data={qualityTimeline} formatter={(value) => `${Math.round(value)}`} />
+          </ChartCard>
+
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <QualityMetric label="Sesiones totales" value={`${metrics.totalSessions}`} detail="Histórico disponible para análisis." />
             <QualityMetric label="Sesiones partial" value={`${metrics.partialSessions}`} detail="Útiles, pero con precisión limitada." />
@@ -217,11 +230,11 @@ export function DataQualitySection({
           </div>
 
           <Card>
-            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Prioridad de mejora de datos</p>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Mejoras de registro</p>
             <div className="mt-4 grid gap-3">
               {qualityActions.map((action, index) => (
                 <div key={action} className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
-                  <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--accent)]">Acción {index + 1}</p>
+                  <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--accent)]">Mejora {index + 1}</p>
                   <p className="mt-2 text-sm font-semibold leading-6 text-[var(--foreground)]">{action}</p>
                 </div>
               ))}

@@ -93,6 +93,24 @@ Limites:
 - no debe sustituir Daily Plan;
 - no debe convertirse en calendario complejo todavia.
 
+## Calendar
+
+Responsabilidad:
+
+- vision visual de adherencia y consistencia;
+- calendario mensual lunes-domingo;
+- mostrar dias entrenados, disciplinas, movilidad, rachas e intensidad visual;
+- detalle solo lectura de dia seleccionado;
+- gamificacion ligera basada en datos reales.
+
+Limites:
+
+- no debe ser el planificador principal;
+- no debe editar `planned_sessions`;
+- no debe crear sesiones reales;
+- no debe decidir que hacer hoy;
+- no debe convertirse en Google Calendar, gestor de proyectos o agenda compleja.
+
 ## Training Log
 
 Responsabilidad:
@@ -163,4 +181,3 @@ Limites:
 - no debe convertirse en Dashboard;
 - no debe implementar BodyMap improvisado;
 - BodyMap futuro debe ser asset-based.
-

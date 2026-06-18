@@ -89,8 +89,8 @@ function TrendBars({ metric }: { metric: TrendMetric }) {
         return (
           <span
             key={item.weekKey}
-            title={`${item.weekKey}: ${formatTrendValue(metric, item.value)}`}
-            className="min-w-0 flex-1 rounded-sm border border-[rgba(244,247,244,0.08)] bg-[linear-gradient(180deg,var(--accent),rgba(244,247,244,0.07))]"
+            title={`${item.isCurrentWeek ? "Esta semana · " : ""}${item.label}${item.metaLabel ? ` · ${item.metaLabel}` : ""}: ${formatTrendValue(metric, item.value)}`}
+            className={`min-w-0 flex-1 rounded-sm border bg-[linear-gradient(180deg,var(--accent),rgba(244,247,244,0.07))] ${item.isCurrentWeek ? "border-[var(--accent-border-strong)] ring-1 ring-[var(--accent)]" : "border-[rgba(244,247,244,0.08)]"}`}
             style={{ height }}
           />
         );

@@ -428,6 +428,8 @@ export function DashboardView({
               data={weeklyChartData.map((week) => ({
                 key: week.weekKey,
                 label: week.label,
+                metaLabel: week.metaLabel,
+                isCurrentWeek: week.isCurrentWeek,
                 structuredRunMeters: week.structuredRunMeters,
                 mixedRunMeters: week.mixedRunMeters,
               }))}
@@ -447,7 +449,7 @@ export function DashboardView({
             footer={trends.duration.message}
           >
             <WeeklyBarChart
-              data={weeklyChartData.map((week) => ({ key: week.weekKey, label: week.label, value: week.durationMinutes }))}
+              data={weeklyChartData.map((week) => ({ key: week.weekKey, label: week.label, metaLabel: week.metaLabel, isCurrentWeek: week.isCurrentWeek, value: week.durationMinutes }))}
               compact
               formatter={(value) => formatDuration(value, { emptyLabel: "0 min" })}
             />
@@ -464,7 +466,7 @@ export function DashboardView({
             footer={trends.load.message}
           >
             <WeeklyBarChart
-              data={weeklyChartData.map((week) => ({ key: week.weekKey, label: week.label, value: week.fatigueCost }))}
+              data={weeklyChartData.map((week) => ({ key: week.weekKey, label: week.label, metaLabel: week.metaLabel, isCurrentWeek: week.isCurrentWeek, value: week.fatigueCost }))}
               compact
               formatter={(value) => `${Math.round(value)} pts`}
               tone={trends.load.status === "subida_brusca" ? "warning" : "accent"}
@@ -482,7 +484,7 @@ export function DashboardView({
             footer={trends.externalLoad.message}
           >
             <WeeklyBarChart
-              data={weeklyChartData.map((week) => ({ key: week.weekKey, label: week.label, value: week.totalExternalLoadKg }))}
+              data={weeklyChartData.map((week) => ({ key: week.weekKey, label: week.label, metaLabel: week.metaLabel, isCurrentWeek: week.isCurrentWeek, value: week.totalExternalLoadKg }))}
               compact
               formatter={formatLoadKg}
               tone="secondary"

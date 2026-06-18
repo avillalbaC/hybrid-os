@@ -9,6 +9,7 @@ import {
   startOfWeek,
   type PeriodRange,
 } from "@/lib/domain/dashboard/periods";
+import { formatRelativeWeekLabel, formatWeekMetaLabel, getWeekStartDateKey } from "@/lib/date/week-labels";
 import { calculateMuscleSummary, getTopMuscles } from "@/lib/domain/training/muscle-load";
 import { getRunningBreakdown } from "@/lib/domain/training/run-exposure";
 import { isSecondaryActivity } from "@/lib/domain/training/secondary-activity";
@@ -35,6 +36,7 @@ export type PeriodReport = {
   type: PeriodReportType;
   periodKey: string;
   label: string;
+  metaLabel?: string;
   startDate: string;
   endDate: string;
   isClosed: boolean;
@@ -67,7 +69,7 @@ const monthFormatter = new Intl.DateTimeFormat("es-ES", {
 });
 
 function formatDateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function isAnalysableSession(session: TrainingSession) {
@@ -123,9 +125,9 @@ function getPeriodKey(type: PeriodReportType, date: string | Date) {
   return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function getPeriodLabel(type: PeriodReportType, range: PeriodRange, periodKey: string) {
+function getPeriodLabel(type: PeriodReportType, range: PeriodRange, referenceDate: Date) {
   if (type === "week") {
-    return `${periodKey} · ${range.start.getDate().toString().padStart(2, "0")}/${(range.start.getMonth() + 1).toString().padStart(2, "0")} - ${range.end.getDate().toString().padStart(2, "0")}/${(range.end.getMonth() + 1).toString().padStart(2, "0")}`;
+    return formatRelativeWeekLabel(formatDateKey(range.start), getWeekStartDateKey(referenceDate));
   }
 
   return monthFormatter.format(range.start);
@@ -250,7 +252,8 @@ function buildReport(
     id: `${type}-${periodKey}`,
     type,
     periodKey,
-    label: getPeriodLabel(type, range, periodKey),
+    label: getPeriodLabel(type, range, referenceDate),
+    metaLabel: type === "week" ? `ISO ${formatWeekMetaLabel(periodKey, { includeYear: true })}` : undefined,
     startDate: formatDateKey(range.start),
     endDate: formatDateKey(range.end),
     isClosed,

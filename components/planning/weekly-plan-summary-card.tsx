@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
+import { formatRelativeWeekLabel, getCurrentWeekStartLocal } from "@/lib/date/week-labels";
 import type { WeeklyPlanDeviation, WeeklyPlanSummary } from "@/types/planning";
 import { plannedSessionTypeLabels } from "./planning-labels";
 
@@ -27,6 +28,7 @@ export function WeeklyPlanSummaryCard({
   isLoading?: boolean;
 }) {
   const types = getAllTypes(summary);
+  const weekLabel = formatRelativeWeekLabel(summary.weekStart, getCurrentWeekStartLocal());
 
   return (
     <Card>
@@ -55,7 +57,8 @@ export function WeeklyPlanSummaryCard({
             </div>
             <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
               <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Semana</p>
-              <p className="mt-1 font-mono text-xs font-black">{summary.weekStart} - {summary.weekEnd}</p>
+              <p className="mt-1 text-sm font-black">{weekLabel}</p>
+              <p className="mt-1 font-mono text-xs text-[var(--muted)]">{summary.weekStart} - {summary.weekEnd}</p>
             </div>
           </div>
 

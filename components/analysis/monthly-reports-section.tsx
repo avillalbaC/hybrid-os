@@ -1,8 +1,16 @@
 import { PeriodReportCard } from "@/components/analysis/period-report-card";
 import { ChartCard } from "@/components/charts/chart-card";
+import { HorizontalRankingChart } from "@/components/charts/horizontal-ranking-chart";
+import { StackedWeeklyBars } from "@/components/charts/stacked-weekly-bars";
 import { WeeklyBarChart } from "@/components/charts/weekly-bar-chart";
 import { Card } from "@/components/ui/card";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
+import {
+  buildDisciplineDistributionData,
+  buildIntensityDistributionData,
+  buildMuscleRankingData,
+  buildRunningSplitData,
+} from "@/lib/analytics/analysis-chart-data";
 import { getMonthlyChartData } from "@/lib/analytics/chart-data";
 import { getMonthlyReports } from "@/lib/analytics/period-reports";
 import { formatDuration, formatKm, formatLoadKg } from "@/lib/utils/format";
@@ -29,6 +37,10 @@ export function MonthlyReportsSection({
 }) {
   const reports = getMonthlyReports(sessions, { limit: 8, includeOpen: true });
   const monthlyData = getMonthlyChartData(sessions).slice(-8);
+  const monthlyDiscipline = buildDisciplineDistributionData(sessions, "month").slice(-8);
+  const monthlyRunning = buildRunningSplitData(sessions, "month").slice(-8);
+  const monthlyIntensity = buildIntensityDistributionData(sessions, "month").slice(-8);
+  const muscleRanking = buildMuscleRankingData(sessions, "all").slice(0, 8);
 
   return (
     <section>
@@ -69,6 +81,49 @@ export function MonthlyReportsSection({
               <WeeklyBarChart
                 data={monthlyData.map((month) => ({ key: month.monthKey, label: month.label, value: month.totalExternalLoadKg }))}
                 formatter={formatLoadKg}
+              />
+            </ChartCard>
+          </div>
+          <div className="grid gap-5 xl:grid-cols-2">
+            <ChartCard
+              title="Running mensual estructurado vs mixto"
+              description="Kilómetros por mes separados entre running puro y carrera dentro de sesiones mixtas."
+              unit="km"
+              footer="La carrera mixta mantiene contexto de impacto, pero no equivale a running técnico."
+            >
+              <StackedWeeklyBars data={monthlyRunning} formatter={(value) => `${value.toFixed(1)} km`} />
+            </ChartCard>
+            <ChartCard
+              title="Distribución mensual por disciplina"
+              description="Reparto de sesiones por tipo de estímulo en cada mes."
+              unit="sesiones"
+              footer="Útil para leer cambios de bloque sin depender solo del total de sesiones."
+            >
+              <StackedWeeklyBars data={monthlyDiscipline} formatter={(value) => `${Math.round(value)}`} />
+            </ChartCard>
+            <ChartCard
+              title="Intensidad mensual"
+              description="Sesiones agrupadas por RPE bajo, moderado, alto y sin dato."
+              unit="sesiones"
+              footer="Los segmentos sin RPE limitan la comparación mensual de intensidad."
+            >
+              <StackedWeeklyBars data={monthlyIntensity} formatter={(value) => `${Math.round(value)}`} />
+            </ChartCard>
+            <ChartCard
+              title="Top músculos del histórico mensual"
+              description="Ranking muscular agregado para contextualizar los informes mensuales recientes."
+              unit="pts"
+              isEmpty={muscleRanking.length === 0}
+              footer="El ranking resume concentración muscular acumulada; el detalle cerrado vive en cada informe mensual."
+            >
+              <HorizontalRankingChart
+                items={muscleRanking.map((item) => ({
+                  key: item.muscle,
+                  label: item.label,
+                  value: item.load,
+                  percentage: item.percentage,
+                }))}
+                formatter={(value) => `${Math.round(value)} pts`}
               />
             </ChartCard>
           </div>

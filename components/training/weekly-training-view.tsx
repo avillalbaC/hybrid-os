@@ -15,7 +15,7 @@ import type { TrainingSession } from "@/types/training";
 
 export function WeeklyTrainingView({ seedSessions }: { seedSessions: TrainingSession[] }) {
   const { sessions, pendingSessions, source, syncMessage } = useTrainingSessions(seedSessions);
-  const { currentWeekKey, previousWeekKey, currentWeekSessions, previousWeekSessions } = getLatestWeekSessions(sessions);
+  const { currentWeekLabel, currentWeekMetaLabel, previousWeekLabel, previousWeekMetaLabel, currentWeekSessions, previousWeekSessions } = getLatestWeekSessions(sessions);
   const comparison = compareWeeks(currentWeekSessions, previousWeekSessions);
   const topMuscles = getTopMuscles(currentWeekSessions, 6);
   const hardSessions = currentWeekSessions.filter(
@@ -44,7 +44,7 @@ export function WeeklyTrainingView({ seedSessions }: { seedSessions: TrainingSes
       {syncMessage ? <p className="mb-5 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-3 text-sm text-[var(--muted-strong)]">{syncMessage}</p> : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Semana" value={currentWeekKey} detail={`Anterior: ${previousWeekKey}`} tone="strong" />
+        <MetricCard label="Semana" value={currentWeekLabel} detail={`Anterior: ${previousWeekLabel} · ${previousWeekMetaLabel} · Actual ${currentWeekMetaLabel}`} tone="strong" />
         <MetricCard label="Sesiones" value={`${comparison.current.sessions}`} detail={`${comparison.current.hardSessions} duras`} tone="strong" />
         <MetricCard label="Carrera total" value={`${(comparison.current.runMeters / 1000).toFixed(1)} km`} detail={`${(comparison.previous.runMeters / 1000).toFixed(1)} km semana anterior`} />
         <MetricCard label="Duración" value={formatDuration(comparison.current.durationMinutes)} detail={`${formatDuration(comparison.previous.durationMinutes)} semana anterior`} />

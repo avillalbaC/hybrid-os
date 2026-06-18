@@ -34,6 +34,7 @@ export function PeriodReportCard({
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone={report.isClosed ? "accent" : "neutral"}>{report.isClosed ? "Cerrado" : "En curso"}</Badge>
                 <Badge>{report.label}</Badge>
+                {report.metaLabel ? <Badge tone="neutral">{report.metaLabel}</Badge> : null}
               </div>
               <h4 className="mt-3 text-xl font-black tracking-tight text-[var(--foreground)]">{report.headline}</h4>
               <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{report.conclusion}</p>
@@ -78,6 +79,8 @@ export function PeriodReportCard({
                     {
                       key: report.periodKey,
                       label: report.label,
+                      metaLabel: report.metaLabel,
+                      isCurrentWeek: report.type === "week" && !report.isClosed,
                       structuredRunMeters: report.metrics.structuredRunMeters,
                       mixedRunMeters: report.metrics.mixedRunMeters,
                     },

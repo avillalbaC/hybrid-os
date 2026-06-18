@@ -77,14 +77,14 @@ export function AnalysisPage({
             <p className="text-[0.7rem] font-bold uppercase tracking-[0.28em] text-[var(--accent)]">Análisis profundo</p>
             <h2 className="mt-3 text-4xl font-black tracking-tight text-[var(--foreground)] sm:text-6xl">Análisis</h2>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">
-              Informes, tendencias y conclusiones históricas a partir de tus sesiones reales.
+              Laboratorio visual para leer evolución, distribución, intensidad, calidad de datos y contexto útil para el check diario.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Badge tone={source === "remote" ? "accent" : source === "seed-fallback" ? "warning" : "neutral"}>
                 {source === "remote" ? "Datos reales" : source === "seed-fallback" ? "Fallback seed" : "sincronizando"}
               </Badge>
               <Badge>Histórico dinámico</Badge>
-              <Badge>Informes automáticos</Badge>
+              <Badge>Contexto objetivo</Badge>
             </div>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap lg:items-center lg:justify-end">
@@ -124,7 +124,7 @@ export function AnalysisPage({
       ) : null}
       {activeTab === "weeks" ? <WeeklyReportsSection sessions={dashboardSessions} isLoading={isMetricsLoading} /> : null}
       {activeTab === "months" ? <MonthlyReportsSection sessions={dashboardSessions} isLoading={isMetricsLoading} /> : null}
-      {activeTab === "trends" ? <FullTrendsSection trends={trends} isLoading={isMetricsLoading} /> : null}
+      {activeTab === "trends" ? <FullTrendsSection sessions={dashboardSessions} trends={trends} isLoading={isMetricsLoading} /> : null}
       {activeTab === "data-quality" ? <DataQualitySection sessions={dashboardSessions} isLoading={isMetricsLoading} /> : null}
     </>
   );

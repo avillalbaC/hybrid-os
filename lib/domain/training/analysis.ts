@@ -5,6 +5,7 @@ import {
   isDateInRange,
   resolvePeriodReferenceDate,
 } from "@/lib/domain/dashboard/periods";
+import { formatRelativeWeekLabel, formatWeekMetaLabel, getWeekStartDateKey } from "@/lib/date/week-labels";
 import { getSessionRunMeters } from "@/lib/domain/training/run-exposure";
 import { isPureRunningSession } from "@/lib/domain/training/session-kind";
 import { getRecentSessions, getWeekKey } from "@/lib/selectors/training";
@@ -35,10 +36,18 @@ export function getLatestWeekSessions(sessions: TrainingSession[]) {
   const previousRange = getPreviousPeriodRange("week", referenceDate);
   const currentWeekSessions = currentRange ? sessions.filter((session) => isDateInRange(session.date, currentRange)) : [];
   const previousWeekSessions = previousRange ? sessions.filter((session) => isDateInRange(session.date, previousRange)) : [];
+  const currentWeekStart = currentRange ? getWeekStartDateKey(currentRange.start) : null;
+  const previousWeekStart = previousRange ? getWeekStartDateKey(previousRange.start) : null;
+  const currentWeekKey = currentWeekSessions[0] ? getWeekKey(currentWeekSessions[0].date) : currentWeekStart ? getWeekKey(currentWeekStart) : "empty";
+  const previousWeekKey = previousWeekSessions[0] ? getWeekKey(previousWeekSessions[0].date) : previousWeekStart ? getWeekKey(previousWeekStart) : "empty";
 
   return {
-    currentWeekKey: currentWeekSessions[0] ? getWeekKey(currentWeekSessions[0].date) : currentRange ? getWeekKey(currentRange.start.toISOString().slice(0, 10)) : "empty",
-    previousWeekKey: previousWeekSessions[0] ? getWeekKey(previousWeekSessions[0].date) : previousRange ? getWeekKey(previousRange.start.toISOString().slice(0, 10)) : "empty",
+    currentWeekKey,
+    previousWeekKey,
+    currentWeekLabel: currentWeekStart ? formatRelativeWeekLabel(currentWeekStart, getWeekStartDateKey(new Date())) : "Sin semana",
+    previousWeekLabel: previousWeekStart ? formatRelativeWeekLabel(previousWeekStart, getWeekStartDateKey(new Date())) : "Sin semana previa",
+    currentWeekMetaLabel: formatWeekMetaLabel(currentWeekKey),
+    previousWeekMetaLabel: formatWeekMetaLabel(previousWeekKey),
     currentWeekSessions,
     previousWeekSessions,
   };

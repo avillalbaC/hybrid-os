@@ -76,7 +76,7 @@ export function TrendCardChart({ metric }: { metric: TrendMetric }) {
       </dl>
       <div className="mt-4">
         <WeeklyBarChart
-          data={metric.weeklyValues.map((item) => ({ key: item.weekKey, label: item.label, value: item.value }))}
+          data={metric.weeklyValues.map((item) => ({ key: item.weekKey, label: item.label, metaLabel: item.metaLabel, isCurrentWeek: item.isCurrentWeek, value: item.value }))}
           formatter={(value) => formatTrendValue(metric, value)}
           compact
           tone={metric.status === "subida_brusca" ? "warning" : "accent"}
