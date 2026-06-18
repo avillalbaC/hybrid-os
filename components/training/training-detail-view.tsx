@@ -234,6 +234,101 @@ function ResultCard({
   );
 }
 
+type QuickMetric = {
+  label: string;
+  value: React.ReactNode;
+  tone?: "neutral" | "accent" | "warning";
+};
+
+function QuickMetricsSection({ session }: { session: TrainingSession }) {
+  const runMeters = getSessionRunMeters(session);
+  const metrics: QuickMetric[] = [
+    { label: "Duración", value: formatDuration(session.durationMinutes), tone: "accent" as const },
+    { label: "RPE", value: formatRpe(session.rpe), tone: session.rpe && session.rpe >= 8 ? "warning" as const : "neutral" as const },
+    { label: "Distancia", value: runMeters > 0 ? formatKm(runMeters, { forceKm: true }) : "Sin carrera" },
+    { label: "Calorías", value: formatCalories(session.sessionMetrics.totalCalories) },
+    { label: "Peso movido", value: formatLoadKg(session.sessionMetrics.totalExternalLoadKg), tone: session.sessionMetrics.totalExternalLoadKg ? "accent" as const : "neutral" as const },
+    { label: "Fatiga", value: `${session.sessionMetrics.fatigueCost} pts`, tone: session.sessionMetrics.fatigueCost >= 80 ? "warning" as const : "neutral" as const },
+    { label: "Impacto", value: `${session.sessionMetrics.impactScore} pts`, tone: session.sessionMetrics.impactScore >= 80 ? "warning" as const : "neutral" as const },
+    { label: "Carga cardio/fuerza", value: `${session.sessionMetrics.cardioLoad}/${session.sessionMetrics.strengthLoad} pts` },
+  ];
+
+  return (
+    <Card>
+      <SectionTitle eyebrow="Métricas rápidas" title="Lo importante de la sesión" id="metricas" />
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <SummaryStat key={metric.label} label={metric.label} value={metric.value} tone={metric.tone} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function getRelevantMissingFields(session: TrainingSession) {
+  const missing = new Set<string>();
+
+  if (!session.durationMinutes) {
+    missing.add("Duración");
+  }
+
+  if (!session.rpe) {
+    missing.add("RPE");
+  }
+
+  if (!session.result?.score && !session.result?.timeSeconds && session.result?.type !== "none") {
+    missing.add("Resultado");
+  }
+
+  if (session.blocks.length === 0) {
+    missing.add("Bloques");
+  }
+
+  if (session.blocks.length > 0 && session.blocks.every((block) => block.exercises.length === 0)) {
+    missing.add("Ejercicios");
+  }
+
+  if (getSessionRunMeters(session) > 0 && !session.equipment?.shoes) {
+    missing.add("Zapatillas");
+  }
+
+  const hasMuscleSummary = Object.values(session.sessionMuscleSummary).some((load) => load > 0);
+  if (!hasMuscleSummary) {
+    missing.add("Carga muscular");
+  }
+
+  session.pendingFields.forEach((field) => missing.add(field));
+
+  return Array.from(missing);
+}
+
+function DataQualitySection({ session }: { session: TrainingSession }) {
+  const missingFields = getRelevantMissingFields(session);
+
+  return (
+    <Card>
+      <SectionTitle eyebrow="Calidad de datos" title="Campos pendientes y precisión" id="calidad" />
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <SummaryStat label="Estado" value={statusLabels[session.status]} tone={session.status === "completed" ? "accent" : "warning"} />
+        <SummaryStat label="Data quality" value={formatDataQuality(session.dataQuality)} tone={session.dataQuality === "high" ? "accent" : "warning"} />
+        <SummaryStat label="Pending fields" value={session.pendingFields.length} tone={session.pendingFields.length > 0 ? "warning" : "accent"} />
+      </div>
+      <div className="mt-5 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.024)] p-4">
+        <p className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Ausencias relevantes</p>
+        {missingFields.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {missingFields.map((field) => (
+              <Badge key={field} tone="warning">{field}</Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-[var(--muted-strong)]">Sin ausencias relevantes para esta vista.</p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function MetadataSection({
   session,
   ergMetrics,
@@ -245,7 +340,7 @@ function MetadataSection({
     <Card>
       <div className="grid gap-6 xl:grid-cols-3">
         <div>
-          <SectionTitle title="Datos principales" />
+          <SectionTitle title="Contexto" id="datos" />
           <dl className="mt-4 grid gap-4">
             <CompactField label="Título" value={session.title} />
             <CompactField label="Fecha" value={formatLongDate(session.date)} />
@@ -254,11 +349,9 @@ function MetadataSection({
           </dl>
         </div>
         <div>
-          <SectionTitle title="Calidad y notas" />
+          <SectionTitle title="Sensaciones y origen" />
           <dl className="mt-4 grid gap-4">
-            <CompactField label="Data quality" value={formatDataQuality(session.dataQuality)} />
             <CompactField label="Source" value={sourceLabels[session.source]} />
-            <CompactField label="Pending fields" value={session.pendingFields.length > 0 ? session.pendingFields.join(", ") : "Sin campos pendientes"} />
             <CompactField label="Feeling" value={formatOptional(session.feeling)} />
             <CompactField label="Soreness" value={session.soreness.length > 0 ? session.soreness.join(", ") : "-"} />
             <CompactField label="Injury notes" value={formatOptional(session.injuryNotes)} />
@@ -398,10 +491,12 @@ function MuscleRanking({ session }: { session: TrainingSession }) {
     .sort(([, a], [, b]) => b - a);
   const maxLoad = muscles[0]?.[1] ?? 0;
   const warningMuscles = muscles.filter(([, load]) => load >= 80).slice(0, 3);
+  const visibleMuscles = muscles.slice(0, 8);
+  const hiddenMuscles = muscles.slice(8);
 
   return (
     <Card>
-      <h3 className="text-lg font-black">Carga muscular</h3>
+      <SectionTitle eyebrow="Carga muscular" title="Músculos principales" id="muscular" />
       <p className="mt-1 text-sm text-[var(--muted)]">Máximo de sesión: {maxLoad > 0 ? `${maxLoad} puntos` : "-"}</p>
       {warningMuscles.length > 0 ? (
         <p className="mt-3 rounded-md border border-[rgba(240,196,107,0.28)] bg-[var(--warning-soft)] p-3 text-sm font-semibold leading-5 text-[var(--warning)]">
@@ -409,7 +504,7 @@ function MuscleRanking({ session }: { session: TrainingSession }) {
         </p>
       ) : null}
       <div className="mt-4 space-y-3">
-        {muscles.length > 0 ? muscles.slice(0, 8).map(([muscle, load]) => (
+        {muscles.length > 0 ? visibleMuscles.map(([muscle, load]) => (
           <div key={muscle} className="grid gap-2">
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="font-semibold text-[var(--foreground)]">{formatMuscleName(muscle)}</span>
@@ -424,6 +519,18 @@ function MuscleRanking({ session }: { session: TrainingSession }) {
           </div>
         )) : <p className="text-sm text-[var(--muted)]">Sin carga muscular registrada.</p>}
       </div>
+      {hiddenMuscles.length > 0 ? (
+        <details className="mt-5 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.02)] p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.12em] text-[var(--accent)]">
+            Ver resumen completo · {hiddenMuscles.length} músculos más
+          </summary>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {hiddenMuscles.map(([muscle, load]) => (
+              <Badge key={muscle}>{formatMuscleName(muscle)} · {load}</Badge>
+            ))}
+          </div>
+        </details>
+      ) : null}
     </Card>
   );
 }
@@ -442,9 +549,12 @@ function Sidebar({
       <Card>
         <h3 className="text-lg font-black">Navegación</h3>
         <nav className="mt-4 grid gap-2 text-sm font-semibold text-[var(--muted-strong)]">
+          <a href="#metricas" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Métricas</a>
           <a href="#resultado" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Resultado</a>
-          <a href="#datos" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Datos y calidad</a>
           <a href="#bloques" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Bloques</a>
+          <a href="#muscular" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Carga muscular</a>
+          <a href="#calidad" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Calidad</a>
+          <a href="#datos" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Contexto</a>
           <a href="#debug" className="rounded-md border border-[var(--line)] px-3 py-2 transition hover:border-[var(--accent-border)] hover:text-[var(--foreground)]">Payload/debug</a>
         </nav>
         <div className="mt-4 grid gap-3">
@@ -462,8 +572,6 @@ function Sidebar({
           ) : <p className="text-sm text-[var(--muted)]">No hay sesión más antigua.</p>}
         </div>
       </Card>
-
-      <MuscleRanking session={session} />
 
       <Card>
         <h3 className="text-lg font-black">Tags</h3>
@@ -588,12 +696,10 @@ export function TrainingDetailView({
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <main className="space-y-5">
+          <QuickMetricsSection session={activeSession} />
+
           <div id="resultado" className="scroll-mt-24">
             <ResultCard session={activeSession} />
-          </div>
-
-          <div id="datos" className="scroll-mt-24">
-            <MetadataSection session={activeSession} ergMetrics={ergMetrics} />
           </div>
 
           <div id="bloques" className="space-y-4 scroll-mt-24">
@@ -607,6 +713,12 @@ export function TrainingDetailView({
               </Card>
             )}
           </div>
+
+          <MuscleRanking session={activeSession} />
+
+          <DataQualitySection session={activeSession} />
+
+          <MetadataSection session={activeSession} ergMetrics={ergMetrics} />
         </main>
 
         <Sidebar session={activeSession} previousSession={previousSession} nextSession={nextSession} />

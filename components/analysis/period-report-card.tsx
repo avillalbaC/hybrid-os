@@ -23,7 +23,7 @@ export function PeriodReportCard({
   report: PeriodReport;
 }) {
   const topInsights = report.keyInsights.slice(0, 2);
-  const topRecommendation = report.recommendations[0];
+  const topContext = topInsights[0]?.evidence[0] ?? report.conclusion;
 
   return (
     <Card>
@@ -49,9 +49,9 @@ export function PeriodReportCard({
             <MetricPill label="Carrera total" value={formatKm(report.metrics.totalRunMeters, { forceKm: true })} />
             <MetricPill label="RPE medio" value={formatRpe(report.metrics.averageRpe)} />
           </dl>
-          {topRecommendation ? (
+          {topContext ? (
             <p className="mt-3 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 text-sm font-semibold leading-6 text-[var(--foreground)]">
-              {topRecommendation}
+              {topContext}
             </p>
           ) : null}
           <div className="mt-4 grid gap-3 lg:grid-cols-3">
@@ -129,8 +129,8 @@ export function PeriodReportCard({
           </div>
 
           <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
-            <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Prioridad siguiente</p>
-            <p className="mt-2 text-sm font-semibold leading-6 text-[var(--foreground)]">{topRecommendation ?? "Sin recomendación determinista."}</p>
+            <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Contexto del cierre</p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-[var(--foreground)]">{topContext ?? "Sin contexto determinista."}</p>
           </div>
         </div>
 

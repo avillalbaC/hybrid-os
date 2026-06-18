@@ -29,7 +29,7 @@ function PreviewReport({ report }: { report: PeriodReport }) {
         </div>
       </dl>
       <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">
-        {formatKm(report.metrics.totalRunMeters, { forceKm: true })} carrera total. {report.recommendations[0] ?? report.conclusion}
+        {formatKm(report.metrics.totalRunMeters, { forceKm: true })} carrera total. {report.conclusion}
       </p>
     </article>
   );

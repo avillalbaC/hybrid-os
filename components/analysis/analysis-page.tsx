@@ -13,6 +13,8 @@ import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { Badge } from "@/components/ui/badge";
 import { getTrainingDataInsights } from "@/lib/analytics/data-insights";
 import { getWeeklyTrendMetrics } from "@/lib/analytics/trends";
+import { useActiveGoalEvaluation } from "@/lib/goals/use-active-goal-evaluation";
+import { useWeeklyPlanning } from "@/lib/planning/use-weekly-planning";
 import { useDashboardData } from "@/lib/storage/use-dashboard-data";
 import type { DashboardPeriod } from "@/lib/domain/dashboard/periods";
 import type { BodyCheck } from "@/types/body";
@@ -42,6 +44,8 @@ export function AnalysisPage({
   const [period, setPeriod] = useState<DashboardPeriod>("week");
   const {
     sessions: dashboardSessions,
+    bodyChecks: dashboardBodyChecks,
+    nutritionChecks: dashboardNutritionChecks,
     source,
     message: syncMessage,
     isLoading,
@@ -53,6 +57,12 @@ export function AnalysisPage({
   });
   const analysis = useMemo(() => getTrainingDataInsights(dashboardSessions, { period }), [dashboardSessions, period]);
   const trends = useMemo(() => getWeeklyTrendMetrics(dashboardSessions), [dashboardSessions]);
+  const weeklyPlanning = useWeeklyPlanning();
+  const goalContext = useActiveGoalEvaluation(dashboardSessions, {
+    bodyChecks: dashboardBodyChecks,
+    nutritionChecks: dashboardNutritionChecks,
+    plannedSessions: weeklyPlanning.plannedSessions,
+  });
   const isMetricsLoading = isLoading || !isReady;
 
   useEffect(() => {
@@ -99,7 +109,19 @@ export function AnalysisPage({
         <AnalysisTabs activeTab={activeTab} onChange={setActiveTab} />
       </section>
 
-      {activeTab === "current" ? <CurrentAnalysisSection analysis={analysis} isLoading={isMetricsLoading} period={period} sessions={dashboardSessions} trends={trends} /> : null}
+      {activeTab === "current" ? (
+        <CurrentAnalysisSection
+          analysis={analysis}
+          goalProgress={goalContext.progress}
+          isGoalLoading={goalContext.isLoading}
+          isPlanningLoading={weeklyPlanning.isLoading}
+          isLoading={isMetricsLoading}
+          period={period}
+          planningSummary={weeklyPlanning.summary}
+          sessions={dashboardSessions}
+          trends={trends}
+        />
+      ) : null}
       {activeTab === "weeks" ? <WeeklyReportsSection sessions={dashboardSessions} isLoading={isMetricsLoading} /> : null}
       {activeTab === "months" ? <MonthlyReportsSection sessions={dashboardSessions} isLoading={isMetricsLoading} /> : null}
       {activeTab === "trends" ? <FullTrendsSection trends={trends} isLoading={isMetricsLoading} /> : null}

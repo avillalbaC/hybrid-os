@@ -5,6 +5,7 @@ import Link from "next/link";
 import { QuickDataInsightCard } from "@/components/analytics/data-insights-panel";
 import { MetricSparkline } from "@/components/charts/metric-sparkline";
 import { DailyPlanCard } from "@/components/home/daily-plan-card";
+import { WeeklyPlanCard } from "@/components/planning/weekly-plan-card";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
@@ -13,6 +14,8 @@ import { getWeeklyChartData } from "@/lib/analytics/chart-data";
 import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
 import { getLatestWeekSessions } from "@/lib/domain/training/analysis";
 import { getSessionRunMeters, getTotalRunExposureMeters } from "@/lib/domain/training/run-exposure";
+import { useActiveGoalEvaluation } from "@/lib/goals/use-active-goal-evaluation";
+import { useWeeklyPlanning } from "@/lib/planning/use-weekly-planning";
 import { useTrainingSessions } from "@/lib/storage/use-training-sessions";
 import { formatDataQuality, formatDate, formatDuration, formatKm, formatRpe, formatTrainingType } from "@/lib/utils/format";
 import type { BodyCheck } from "@/types/body";
@@ -171,8 +174,8 @@ function getNextAction({
 
   if (hasCriticalSignal || hardSessions.length >= 3) {
     return {
-      title: "Priorizar recuperación",
-      detail: "Baja intensidad, movilidad y sueño antes de añadir otra sesión dura.",
+      title: "Recuperación en contexto",
+      detail: "La semana concentra intensidad; conviene revisar sueño, movilidad y rigidez en el check diario.",
       href: "/training/weekly",
       label: "Ver semana",
       tone: "warning",
@@ -181,8 +184,8 @@ function getNextAction({
 
   if (runExposureKm > 0 && topCalvesLoad >= 180) {
     return {
-      title: "Evitar impacto",
-      detail: "Mantén el motor con bajo impacto y revisa gemelos antes de volver a correr fuerte.",
+      title: "Impacto a revisar",
+      detail: "Hay carrera total con gemelos cargados; es una señal útil para el check diario.",
       href: "/training/running",
       label: "Ver carrera",
       tone: "warning",
@@ -191,8 +194,8 @@ function getNextAction({
 
   if (topShouldersLoad >= 220) {
     return {
-      title: "Upper push moderado",
-      detail: "Hombros vienen cargados. Prioriza técnica, tirón suave o movilidad torácica.",
+      title: "Hombros en carga",
+      detail: "La carga de hombros aparece alta frente al resto de la semana.",
       href: "/muscle-load",
       label: "Ver carga",
       tone: "warning",
@@ -201,8 +204,8 @@ function getNextAction({
 
   if (weekSessions.length === 0) {
     return {
-      title: "Registrar actividad",
-      detail: "Importa el último entrenamiento para que el estado diario tenga datos reales.",
+      title: "Registro pendiente",
+      detail: "Sin sesiones registradas esta semana; el contexto depende del próximo entrenamiento importado.",
       href: "/training/import",
       label: "Importar",
       tone: "accent",
@@ -210,8 +213,8 @@ function getNextAction({
   }
 
   return {
-    title: "Mantener plan",
-    detail: "La semana no muestra señales principales de sobrecarga. Sostén el ritmo y registra la siguiente sesión.",
+    title: "Semana estable",
+    detail: "La semana no muestra señales principales de sobrecarga con los datos actuales.",
     href: "/training/import",
     label: "Importar sesión",
     tone: "accent",
@@ -323,9 +326,9 @@ function NextActionCard({
 }) {
   return (
     <Card className={action.tone === "warning" ? "border-[rgba(240,196,107,0.26)]" : ""}>
-      <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Próxima acción</p>
+      <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Contexto para hoy</p>
       {isLoading ? (
-        <div className="mt-3" aria-label="Próxima acción calculando">
+        <div className="mt-3" aria-label="Contexto para hoy calculando">
           <SkeletonBlock className="h-8 w-3/4" />
           <div className="mt-4">
             <SkeletonText lines={2} />
@@ -392,6 +395,57 @@ function QuickLinksCard() {
   );
 }
 
+function HomeGoalContextCard({
+  title,
+  summary,
+  positiveSignal,
+  negativeSignal,
+  isLoading,
+}: {
+  title: string | null;
+  summary: string;
+  positiveSignal: string | null;
+  negativeSignal: string | null;
+  isLoading?: boolean;
+}) {
+  return (
+    <Card className="border-[rgba(34,211,238,0.16)]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Objetivo activo</p>
+          {isLoading ? (
+            <SkeletonBlock className="mt-3 h-7 w-64" />
+          ) : (
+            <h3 className="mt-2 text-xl font-black tracking-tight">{title ?? "Sin objetivo activo"}</h3>
+          )}
+        </div>
+        <Link href="/goals" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+          Ver objetivos
+        </Link>
+      </div>
+      {isLoading ? (
+        <div className="mt-4">
+          <SkeletonText lines={2} />
+        </div>
+      ) : (
+        <>
+          <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">{summary}</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <p className="rounded-md border border-[rgba(34,211,238,0.18)] bg-[var(--accent-faint)] p-3 text-sm leading-6 text-[var(--muted-strong)]">
+              <span className="block font-bold text-[var(--foreground)]">Señal a favor</span>
+              {positiveSignal ?? "Sin señal positiva clara."}
+            </p>
+            <p className="rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-3 text-sm leading-6 text-[var(--muted-strong)]">
+              <span className="block font-bold text-[var(--foreground)]">Señal en contra</span>
+              {negativeSignal ?? "Sin señal negativa clara."}
+            </p>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
 export function HomeView({
   sessions,
   bodyChecks,
@@ -402,6 +456,12 @@ export function HomeView({
   nutritionChecks: NutritionCheck[];
 }) {
   const { sessions: combinedSessions, pendingSessions, source, syncMessage, isLoading, isReady } = useTrainingSessions(sessions);
+  const weeklyPlanning = useWeeklyPlanning();
+  const goalContext = useActiveGoalEvaluation(combinedSessions, {
+    bodyChecks,
+    nutritionChecks,
+    plannedSessions: weeklyPlanning.plannedSessions,
+  });
   const metrics = calculateDashboardMetrics(combinedSessions, bodyChecks, nutritionChecks, "week");
   const dataAnalysis = useMemo(() => getTrainingDataInsights(combinedSessions, { period: "week" }), [combinedSessions]);
   const weeklyChartData = useMemo(() => getWeeklyChartData(combinedSessions).slice(-8), [combinedSessions]);
@@ -431,6 +491,8 @@ export function HomeView({
   const weeklyReadingText = isMetricsLoading
     ? "Calculando métricas semanales con la fuente final de entrenamiento."
     : weeklyReading;
+  const goalPositiveSignal = goalContext.progress.positiveSignals[0]?.evidence ?? null;
+  const goalNegativeSignal = goalContext.progress.negativeSignals[0]?.evidence ?? null;
 
   return (
     <>
@@ -484,7 +546,20 @@ export function HomeView({
       ) : null}
 
       <div className="flex flex-col gap-6">
-        <DailyPlanCard recommendedAction={isMetricsLoading ? undefined : `${nextAction.title}: ${nextAction.detail}`} />
+        <DailyPlanCard />
+        <HomeGoalContextCard
+          title={goalContext.activeGoal?.title ?? null}
+          summary={goalContext.progress.summary}
+          positiveSignal={goalPositiveSignal}
+          negativeSignal={goalNegativeSignal}
+          isLoading={goalContext.isLoading || isMetricsLoading}
+        />
+        <WeeklyPlanCard
+          plannedSessions={weeklyPlanning.plannedSessions}
+          summary={weeklyPlanning.summary}
+          isLoading={weeklyPlanning.isLoading}
+          compact
+        />
 
         <section className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
           <Card>
@@ -510,7 +585,7 @@ export function HomeView({
             <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Acceso principal</p>
             <h3 className="mt-2 text-xl font-black tracking-tight">Siguiente vista</h3>
             <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-              Dashboard decide el periodo actual. Análisis guarda informes, tendencias y calidad de datos.
+              Dashboard resume el periodo actual. Análisis guarda informes, tendencias y calidad de datos.
             </p>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <PrimaryAction href="/dashboard">Ver dashboard</PrimaryAction>

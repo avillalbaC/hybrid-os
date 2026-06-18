@@ -86,11 +86,11 @@ function getDataQualityActions(metrics: DataQualityMetrics) {
   }
 
   if (actions.length < 3 && metrics.sessionsWithoutRpe > 0) {
-    actions.push("Priorizar RPE en sesiones recientes antes que completar todo el histórico.");
+    actions.push("RPE en sesiones recientes aporta más contexto que completar todo el histórico.");
   }
 
   if (actions.length === 0) {
-    actions.push("Mantener el registro actual y revisar primero sesiones nuevas de alta carga.");
+    actions.push("El registro actual es suficiente; las sesiones nuevas de alta carga son las más relevantes.");
   }
 
   return actions.slice(0, 3);

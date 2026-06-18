@@ -1185,6 +1185,28 @@ export function repairJsonText(input: string): JsonRepairResult {
   };
 }
 
+function formatJsonParseError(message: string, inputText: string) {
+  const positionMatch = message.match(/position (\d+)/i);
+
+  if (!positionMatch) {
+    return {
+      message: "El JSON no se puede interpretar. Revisa comillas, llaves y comas.",
+      suggestion: "Revisa comillas, llaves y comas. El detalle técnico queda disponible para depuración.",
+    };
+  }
+
+  const position = Number(positionMatch[1]);
+  const textBeforePosition = inputText.slice(0, position);
+  const line = textBeforePosition.split("\n").length;
+  const lastLineBreak = textBeforePosition.lastIndexOf("\n");
+  const column = position - lastLineBreak;
+
+  return {
+    message: `El JSON no se puede interpretar en línea ${line}, columna ${column}.`,
+    suggestion: "Revisa esa zona del JSON: normalmente falta una coma, una comilla doble o sobra una coma final.",
+  };
+}
+
 export function formatIssuePath(path: (string | number)[]): string {
   return path.reduce<string>((formattedPath, part) => {
     if (typeof part === "number") {
@@ -1636,14 +1658,16 @@ export function validateHybridOSImport(inputText: string): ImportValidationResul
       autoRepaired = repairResult.changed;
       repairFixes = repairResult.fixes;
     } catch {
+      const parseError = formatJsonParseError(rawParseError, inputText);
+
       return {
         valid: false,
         errors: [{
           severity: "error",
           path: "json",
-          message: "El JSON no se puede interpretar. Revisa comillas, llaves y comas.",
+          message: parseError.message,
           receivedValue: rawParseError,
-          suggestion: "Revisa comillas, llaves y comas. El detalle técnico queda disponible para depuración.",
+          suggestion: parseError.suggestion,
         }],
         warnings: [],
         normalizationChanges: [],

@@ -1,7 +1,15 @@
+export type DailyPriorityStatus = "pending" | "completed" | "discarded" | "postponed";
+
 export type DailyPriority = {
   id: string;
   text: string;
-  done: boolean;
+  done?: boolean;
+  status?: DailyPriorityStatus;
+  postponedToDate?: string | null;
+  postponedFromDate?: string | null;
+  originalPriorityId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type DailyEntrySource = "manual" | "import" | "parser";
@@ -54,11 +62,69 @@ function normalizeDailyPriorityDone(done: unknown) {
   return done === true || done === "true";
 }
 
+function normalizeDailyPriorityStatus(priority: Record<string, unknown>): DailyPriorityStatus {
+  if (
+    priority.status === "pending" ||
+    priority.status === "completed" ||
+    priority.status === "discarded" ||
+    priority.status === "postponed"
+  ) {
+    return priority.status;
+  }
+
+  return normalizeDailyPriorityDone(priority.done) ? "completed" : "pending";
+}
+
+function normalizeNullableString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+export function createDailyPriorityId(prefix = "priority") {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function getPriorityStatus(priority: DailyPriority): DailyPriorityStatus {
+  if (priority.status) {
+    return priority.status;
+  }
+
+  return priority.done === true ? "completed" : "pending";
+}
+
+export function isActivePriority(priority: DailyPriority) {
+  return getPriorityStatus(priority) === "pending";
+}
+
+export function normalizeDailyPriority(raw: unknown, index: number): DailyPriority {
+  const priority = isObject(raw) ? raw : {};
+  const status = normalizeDailyPriorityStatus(priority);
+  const id = typeof priority.id === "string" && priority.id.trim().length > 0
+    ? priority.id.trim()
+    : `priority-${index + 1}`;
+
+  return {
+    id,
+    text: typeof priority.text === "string" ? priority.text.trim() : "",
+    done: status === "completed",
+    status,
+    postponedToDate: normalizeNullableString(priority.postponedToDate),
+    postponedFromDate: normalizeNullableString(priority.postponedFromDate),
+    originalPriorityId: normalizeNullableString(priority.originalPriorityId),
+    createdAt: normalizeNullableString(priority.createdAt) ?? undefined,
+    updatedAt: normalizeNullableString(priority.updatedAt) ?? undefined,
+  };
+}
+
 export function createEmptyDailyPriorities(): DailyPriority[] {
   return Array.from({ length: DAILY_PRIORITY_LIMIT }, (_, index) => ({
     id: `priority-${index + 1}`,
     text: "",
     done: false,
+    status: "pending",
   }));
 }
 
@@ -68,16 +134,41 @@ export function normalizeDailyPriorities(priorities: unknown): DailyPriority[] {
   }
 
   return priorities
-    .filter(isObject)
-    .map((priority, index) => ({
-      id: typeof priority.id === "string" && priority.id.trim().length > 0
-        ? priority.id.trim()
-        : `priority-${index + 1}`,
-      text: typeof priority.text === "string" ? priority.text.trim() : "",
-      done: normalizeDailyPriorityDone(priority.done),
-    }))
+    .map((priority, index) => normalizeDailyPriority(priority, index))
     .filter((priority) => priority.text.length > 0)
-    .slice(0, DAILY_PRIORITY_LIMIT);
+    .map((priority) => ({
+      ...priority,
+      done: getPriorityStatus(priority) === "completed",
+    }));
+}
+
+function createEmptyPrioritySlot(index: number, usedIds: Set<string>): DailyPriority {
+  let id = `priority-${index + 1}`;
+
+  if (usedIds.has(id)) {
+    id = createDailyPriorityId("priority");
+  }
+
+  usedIds.add(id);
+
+  return {
+    id,
+    text: "",
+    done: false,
+    status: "pending",
+  };
+}
+
+export function toPrioritySlots(priorities: unknown): DailyPriority[] {
+  const normalizedPriorities = normalizeDailyPriorities(priorities);
+  const activePriorities = normalizedPriorities.filter(isActivePriority);
+  const closedPriorities = normalizedPriorities.filter((priority) => !isActivePriority(priority));
+  const usedIds = new Set(normalizedPriorities.map((priority) => priority.id));
+  const activeSlots = Array.from({ length: DAILY_PRIORITY_LIMIT }, (_, index) =>
+    activePriorities[index] ?? createEmptyPrioritySlot(index, usedIds),
+  );
+
+  return [...activeSlots, ...activePriorities.slice(DAILY_PRIORITY_LIMIT), ...closedPriorities];
 }
 
 export function normalizeDailyEntryInput(input: unknown): { ok: true; value: DailyEntryInput } | { ok: false; error: string } {

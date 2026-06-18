@@ -77,12 +77,24 @@ export async function POST(request: Request) {
     }
 
     if (hasProperty(error, "duplicateIds")) {
+      const isInternalDuplicate = hasProperty(error, "internalDuplicateIds");
+      const duplicateIds = (error as { duplicateIds: string[] }).duplicateIds;
+
       return NextResponse.json(
         {
-          error: "Training session already exists.",
+          error: isInternalDuplicate ? "Duplicate sessions inside appInput array." : "Training session already exists.",
           dryRun,
-          message: "Ya existe una sesión con ese id. Cambia el id o edita la sesión existente.",
-          duplicateIds: (error as { duplicateIds: string[] }).duplicateIds,
+          message: isInternalDuplicate
+            ? "El array contiene dos o más sesiones con el mismo id. Revisa el JSON antes de guardar."
+            : "Ya existe una sesión con ese id. Cambia el id o edita la sesión existente.",
+          duplicateIds,
+          details: duplicateIds.map((id) => ({
+            id,
+            phase: "duplicate_check",
+            message: isInternalDuplicate
+              ? "Este id aparece más de una vez dentro del array importado."
+              : "Esta sesión ya existe para este usuario.",
+          })),
         },
         { status: 409 },
       );

@@ -33,6 +33,9 @@ Tablas principales en Supabase:
 - `training_exercises`
 - `body_checks`
 - `nutrition_checks`
+- `daily_entries`
+- `goal_blocks`
+- `planned_sessions`
 
 Estado del modelo:
 
@@ -44,16 +47,7 @@ Estado del modelo:
 - `training_sessions.id` sigue siendo `text primary key`, por tanto el identificador de sesion sigue siendo global.
 - El esquema documentado vive en `supabase/training_sessions.sql`.
 
-Datos reales existentes segun diagnostico historico de solo lectura:
-
-- `training_sessions`: 48
-- `raw_imports`: 48
-- `training_exercises`: 315
-- `body_checks`: 0
-- `nutrition_checks`: 0
-- `raw_imports` huerfanos detectados: 0
-
-Estos conteos son snapshot historico, no metrica viva.
+No mantener conteos de filas en este documento. Los conteos cambian con el uso real y deben obtenerse con diagnosticos puntuales de solo lectura cuando hagan falta.
 
 ## Fases
 
@@ -122,6 +116,16 @@ APIs normales que deben requerir usuario autenticado y respetar datos propios:
 - `DELETE /api/training-sessions/:id`
 - `POST /api/imports`
 - `GET /api/dashboard-data`
+- `GET/PUT /api/daily-entry`
+- `GET /api/daily-entry/range`
+- `POST /api/daily-entry/priorities/postpone`
+- `GET /api/daily-entry/pending-review`
+- `POST /api/daily-entry/pending-review/resolve`
+- `GET/POST /api/goals`
+- `GET/PUT /api/goals/active`
+- `GET/POST /api/planned-sessions`
+- `PATCH/DELETE /api/planned-sessions/:id`
+- `GET /api/planning/weekly-summary`
 
 El importador debe guardar `user_id` en:
 
@@ -140,6 +144,7 @@ El importador debe guardar `user_id` en:
 - `raw_imports` debe seguir preservando el JSON original.
 - `payload` completo y metricas historicas no deben reducirse ni perderse.
 - La service role key no debe exponerse en componentes, hooks cliente ni archivos publicos.
+- `daily_entries`, `goal_blocks` y `planned_sessions` deben seguir usando RLS por usuario autenticado.
 
 ## Decision futura: multiusuario real
 

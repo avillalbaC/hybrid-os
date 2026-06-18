@@ -58,7 +58,7 @@ Analysis:
 - Tendencias: tarjetas visuales reutilizables por bloque.
 - Tendencias: bloques con descripcion corta y ancho razonable cuando hay una o dos cards.
 - Calidad de datos: barras de completitud y ranking de pending fields.
-- Calidad de datos: acciones priorizadas e impacto de datos faltantes.
+- Calidad de datos: mejoras de registro e impacto de datos faltantes.
 
 Running:
 
@@ -91,9 +91,9 @@ Home:
 - Cada grafico debe tener titulo, descripcion, unidad visible e insight o footer cuando aporte contexto.
 - Los graficos importantes deben mostrar valor actual, media reciente/cambio y estado cuando esa referencia exista.
 
-## Futura integracion con active goals
+## Integracion con objetivos y plan semanal
 
-No implementado todavia.
+Objetivos activos y plan semanal ya tienen una primera integracion textual en Home, Dashboard y Analysis.
 
 Los componentes y datasets deberian poder recibir en una fase posterior:
 
@@ -108,14 +108,15 @@ Ejemplos futuros:
 - Fuerza minima: 1 sesion pesada.
 - Running estructurado objetivo: 2 sesiones.
 
-Regla prevista:
+Regla vigente:
 
 - El objetivo activo debe explicar si una tendencia que sube es deseable, neutra o arriesgada.
 - Los graficos deben mostrar el objetivo como contexto, no como sustituto de la lectura determinista.
+- Planificado vs realizado debe aparecer como resumen textual compacto antes de implementar bandas visuales complejas.
 
 ## Pendiente
 
-- Vincular objetivos activos para explicar si una tendencia es buena o mala segun bloque.
+- Anadir contexto visual de targets y plan semanal en graficos clave cuando sea simple.
 - Mapa corporal asset-based para Muscle Load.
 - Mayor detalle por zapatilla cuando v1.1 tenga mas datos reales.
 - Tests automaticos si se incorpora framework de test.

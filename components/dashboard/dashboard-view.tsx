@@ -22,6 +22,8 @@ import { getWeeklyTrendMetrics } from "@/lib/analytics/trends";
 import { calculateDashboardMetrics } from "@/lib/domain/dashboard/metrics";
 import { filterSessionsByPeriod } from "@/lib/domain/dashboard/periods";
 import { secondaryActivityKindLabels, summarizeSecondaryActivities, type SecondaryActivitySummary } from "@/lib/domain/training/secondary-activity";
+import { useActiveGoalEvaluation } from "@/lib/goals/use-active-goal-evaluation";
+import { useWeeklyPlanning } from "@/lib/planning/use-weekly-planning";
 import { useDashboardData } from "@/lib/storage/use-dashboard-data";
 import { formatDuration, formatLoadKg } from "@/lib/utils/format";
 import type { DashboardPeriod } from "@/lib/domain/dashboard/periods";
@@ -128,9 +130,6 @@ function WatchSignalsCard({
               <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">
                 {(warning.evidence.length > 1 ? warning.evidence.slice(0, 2).join(" ") : warning.evidence[0]) ?? warning.message}
               </p>
-              {warning.recommendation ? (
-                <p className="mt-2 text-sm font-semibold leading-6 text-[var(--foreground)]">{warning.recommendation}</p>
-              ) : null}
             </div>
           ))
         ) : (
@@ -139,6 +138,90 @@ function WatchSignalsCard({
           </p>
         )}
       </div>
+    </Card>
+  );
+}
+
+function GoalReadingCard({
+  title,
+  summary,
+  positiveSignal,
+  negativeSignal,
+  isLoading,
+}: {
+  title: string | null;
+  summary: string;
+  positiveSignal: string | null;
+  negativeSignal: string | null;
+  isLoading?: boolean;
+}) {
+  return (
+    <Card>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Lectura según objetivo</p>
+          <h3 className="mt-2 text-2xl font-black tracking-tight">{title ? `Objetivo: ${title}` : "Sin objetivo activo"}</h3>
+        </div>
+        <Link href="/goals" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+          Ver objetivos
+        </Link>
+      </div>
+      {isLoading ? (
+        <div className="mt-4">
+          <SkeletonBlock className="h-20 w-full" />
+        </div>
+      ) : (
+        <>
+          <p className="mt-4 text-sm leading-6 text-[var(--muted-strong)]">{summary}</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <p className="rounded-md border border-[rgba(34,211,238,0.18)] bg-[var(--accent-faint)] p-3 text-sm leading-6 text-[var(--muted-strong)]">
+              <span className="block font-bold text-[var(--foreground)]">Señal a favor</span>
+              {positiveSignal ?? "Sin señal positiva clara."}
+            </p>
+            <p className="rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-3 text-sm leading-6 text-[var(--muted-strong)]">
+              <span className="block font-bold text-[var(--foreground)]">Señal en contra</span>
+              {negativeSignal ?? "Sin señal negativa clara."}
+            </p>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function PlanningReadingCard({
+  adherence,
+  deviation,
+  isLoading,
+}: {
+  adherence: number | null;
+  deviation: { title: string; description: string } | null;
+  isLoading?: boolean;
+}) {
+  return (
+    <Card>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Planificado vs realizado</p>
+          <h3 className="mt-2 text-2xl font-black tracking-tight">
+            {adherence === null ? "Sin plan semanal" : `${adherence}% de adherencia semanal`}
+          </h3>
+        </div>
+        <Link href="/goals" className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+          Ver plan
+        </Link>
+      </div>
+      {isLoading ? (
+        <div className="mt-4">
+          <SkeletonBlock className="h-20 w-full" />
+        </div>
+      ) : deviation ? (
+        <p className="mt-4 rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-3 text-sm leading-6 text-[var(--muted-strong)]">
+          <span className="font-semibold text-[var(--foreground)]">{deviation.title}:</span> {deviation.description}
+        </p>
+      ) : (
+        <p className="mt-4 text-sm leading-6 text-[var(--muted)]">No hay desviaciones relevantes entre plan y realidad.</p>
+      )}
     </Card>
   );
 }
@@ -171,6 +254,12 @@ export function DashboardView({
     () => calculateDashboardMetrics(dashboardSessions, dashboardBodyChecks, dashboardNutritionChecks, period),
     [dashboardBodyChecks, dashboardNutritionChecks, dashboardSessions, period],
   );
+  const weeklyPlanning = useWeeklyPlanning();
+  const goalContext = useActiveGoalEvaluation(dashboardSessions, {
+    bodyChecks: dashboardBodyChecks,
+    nutritionChecks: dashboardNutritionChecks,
+    plannedSessions: weeklyPlanning.plannedSessions,
+  });
   const trends = useMemo(() => getWeeklyTrendMetrics(dashboardSessions), [dashboardSessions]);
   const weeklyChartData = useMemo(() => getWeeklyChartData(dashboardSessions).slice(-8), [dashboardSessions]);
   const dataAnalysis = useMemo(() => getTrainingDataInsights(dashboardSessions, { period }), [dashboardSessions, period]);
@@ -181,6 +270,8 @@ export function DashboardView({
     [periodSessions],
   );
   const isMetricsLoading = isLoading || !isReady || isPeriodPending;
+  const goalPositiveSignal = goalContext.progress.positiveSignals[0]?.evidence ?? null;
+  const goalNegativeSignal = goalContext.progress.negativeSignals[0]?.evidence ?? null;
   const sessionsState = isMetricsLoading ? "loading" : "ready";
   const runningState = isMetricsLoading ? "loading" : "ready";
   const durationState = isMetricsLoading ? "loading" : "ready";
@@ -401,6 +492,24 @@ export function DashboardView({
 
       <section className="mt-8">
         <PeriodDecisionSummary analysis={dataAnalysis} isLoading={isMetricsLoading} />
+      </section>
+
+      <section className="mt-8">
+        <GoalReadingCard
+          title={goalContext.activeGoal?.title ?? null}
+          summary={goalContext.progress.summary}
+          positiveSignal={goalPositiveSignal}
+          negativeSignal={goalNegativeSignal}
+          isLoading={goalContext.isLoading || isMetricsLoading}
+        />
+      </section>
+
+      <section className="mt-8">
+        <PlanningReadingCard
+          adherence={weeklyPlanning.summary.adherencePercentage}
+          deviation={weeklyPlanning.summary.deviations[0] ?? null}
+          isLoading={weeklyPlanning.isLoading}
+        />
       </section>
 
       <section className="mt-8 grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">

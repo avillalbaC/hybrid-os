@@ -17,6 +17,19 @@ Documento operativo para mantener la capa de analisis determinista. No describe 
 5. Visualizaciones: graficos ligeros que muestran los datos antes de la explicacion.
    - los insights explican los graficos; no sustituyen graficos.
    - cada grafico importante debe mostrar unidad, valor actual y referencia compacta cuando exista.
+6. Contexto de objetivo: cuando existe objetivo activo, las lecturas comparan metricas contra targets del bloque.
+   - sin objetivo activo, la lectura debe ser descriptiva y evitar recomendaciones demasiado prescriptivas;
+   - con objetivo activo, la lectura puede marcar desviaciones de minimos, maximos y senales a vigilar.
+7. Planificado vs realizado: compara `planned_sessions` con `training_sessions` y `daily_entries`.
+   - objetivo activo define intencion;
+   - planned sessions define compromiso semanal;
+   - training sessions define ejecucion;
+   - daily entries define operacion diaria.
+8. Contexto para check diario: prepara evidencia objetiva para que la decision diaria se tome fuera de la app.
+   - la app no adopta rol de entrenador;
+   - las recomendaciones prescriptivas se reservan para el check diario con ChatGPT;
+   - Hybrid OS produce contexto, senales y evidencia;
+   - evitar lenguaje imperativo salvo acciones tecnicas de UI.
 
 Las tendencias no sustituyen a informes. Los informes usan metricas + tendencias + insights.
 
@@ -30,6 +43,8 @@ Las tendencias no sustituyen a informes. Los informes usan metricas + tendencias
 - `components/analysis/*`: cards/listas de informes.
 - `components/charts/*`: capa visual reutilizable para barras, rankings, sparklines y calidad de datos.
 - `lib/analytics/chart-data.ts`: datasets visuales derivados de sesiones, trends, running exposure y muscle load.
+- `lib/analytics/goal-evaluation.ts`: evaluacion determinista contra el objetivo activo.
+- `lib/analytics/planning-evaluation.ts`: evaluacion determinista de planificado vs realizado.
 - `lib/analytics/__fixtures__/analysis-fixtures.ts`: fixtures manuales sin framework.
 - `lib/analytics/analysis-debug.ts`: helper para revisar outputs de fixtures.
 
@@ -51,7 +66,7 @@ Las tendencias no sustituyen a informes. Los informes usan metricas + tendencias
 - `positive`: senal favorable real, no motivacion vacia.
 - `warning`: accionable; requiere revisar la siguiente decision.
 - `critical`: raro; solo combinaciones claras de carga, impacto, RPE o subida extrema.
-- Todo warning visible debe incluir evidencia concreta y una accion siguiente; evitar copy alarmista sin contexto.
+- Todo warning visible debe incluir evidencia concreta y contexto de revision; evitar copy alarmista sin contexto.
 
 ## Thresholds actuales
 
@@ -94,21 +109,25 @@ Home:
 - Maximo 2-3 senales.
 - Maximo 1 accion.
 - No informes ni listas largas.
-- Puede combinar la accion recomendada con el Plan diario como contexto operativo.
+- Puede combinar senales del objetivo con el Plan diario como contexto operativo.
 - El Plan diario no debe duplicar Dashboard ni convertir recomendaciones en tareas automaticas todavia.
+- Si hay objetivo activo, muestra solo resumen compacto, una senal a favor y una senal en contra; si no hay, CTA discreto a `/goals`.
+- Si hay plan semanal, muestra resumen compacto del plan y la desviacion principal; si no hay plan, no debe sonar a alarma.
 
 Dashboard:
 
-- Centro de decision del periodo actual.
+- Panel de estado del periodo actual.
 - KPIs principales: sesiones, carrera total, duracion, RPE medio y fatiga/carga.
 - Debe mostrar graficos clave del periodo: carrera, duracion, fatiga y peso movido.
 - Cada grafico clave debe incluir valor actual, media/cambio o estado si la tendencia existe.
 - Lectura del periodo con maximo 3 evidencias.
 - Maximo 2-3 riesgos principales.
-- Una decision recomendada con accion principal, por que, priorizar y evitar.
+- Contexto para decision con evidencia, sin ordenar que hacer.
 - Tendencias clave, no todas.
 - Preview de informes, no informes largos completos.
 - Enlace claro a Analysis para profundidad.
+- Debe mostrar una lectura breve segun objetivo activo cuando exista, sin duplicar toda la pagina `/goals`.
+- Debe mostrar una lectura breve planificado vs realizado, sin duplicar lista semanal ni formulario.
 
 Analysis:
 
@@ -119,9 +138,12 @@ Analysis:
 - Tendencias completas agrupadas por volumen, carrera, carga, fuerza, intensidad y muscular.
 - Cada bloque de tendencias debe tener descripcion corta y evitar cards solitarias estiradas innecesariamente.
 - Calidad de datos historica e informativa.
-- Calidad de datos debe proponer maximo 3 acciones priorizadas; no pedir completar todo el historico.
+- Calidad de datos debe proponer maximo 3 mejoras de registro; no pedir completar todo el historico.
 - Calidad de datos debe explicar el impacto de cada falta principal: resultado, RPE, duracion, partial y zapatillas.
 - No persiste informes ni toca Supabase.
+- En Actual debe mostrar contexto de objetivo: evaluacion global, principales senales y enlace a `/goals`.
+- En Actual debe mostrar contexto para check diario con boton de copiar.
+- En Actual debe mostrar Cumplimiento del plan: resumen semanal, principales desviaciones y enlace a `/goals`.
 
 Running:
 
@@ -149,7 +171,12 @@ Informes:
 
 - No inventar progreso por subir carga.
 - No llamar descarga a falta de datos.
-- No marcar baja carrera como problema si el periodo es claramente de fuerza.
+- No marcar baja carrera como problema si el periodo es claramente de fuerza, salvo que el objetivo activo defina un minimo de running.
+- No hacer recomendaciones prescriptivas fuertes si no hay objetivo activo.
+- No ignorar targets activos cuando existen: maximos de descarga, minimos de fuerza y rangos de running deben contextualizar la lectura.
+- No mezclar intencion, plan y ejecucion como si fueran la misma capa.
+- No tratar ausencia de plan semanal como incumplimiento; debe ser estado informativo.
+- No marcar planned sessions como training sessions reales.
 - No usar IA/LLM runtime.
 - No persistir informes.
 - No tocar Supabase schema.
@@ -158,7 +185,7 @@ Informes:
 
 ## Limitaciones conocidas
 
-- No existe objetivo activo del bloque; algunas recomendaciones usan lenguaje condicional.
+- Los objetivos activos y plan semanal cubren el MVP, pero todavia no existe importador de programaciones desde texto ni plantillas.
 - `partial` aparece mucho en historico y puede hacer que calidad de datos sea repetitiva.
 - Body/nutrition estan en pipeline pero actualmente no aportan senales reales.
 - Sin test framework formal; los fixtures actuales son manuales e importables.

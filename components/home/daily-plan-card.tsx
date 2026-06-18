@@ -2,17 +2,27 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
+import { YesterdayPendingReview } from "@/components/home/yesterday-pending-review";
+import { addDaysToDateKey, getLocalDateKey } from "@/lib/date/local-date";
 import {
   DAILY_MOBILITY_FOCUS_OPTIONS,
   DAILY_PRIORITY_LIMIT,
   createEmptyDailyPriorities,
-  normalizeDailyPriorities,
+  getPriorityStatus,
+  isActivePriority,
+  toPrioritySlots,
   type DailyEntry,
   type DailyPriority,
+  type DailyPriorityStatus,
 } from "@/types/daily";
 
 type DailyEntryResponse = {
   entry: DailyEntry | null;
+};
+
+type PostponePriorityResponse = {
+  fromEntry: DailyEntry;
+  toEntry: DailyEntry;
 };
 
 type DailyPlanCardProps = {
@@ -38,20 +48,13 @@ type DailyPlanFormState = {
   dailyNote: string;
 };
 
-function getLocalDateKey() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
+type PostponeDialogState = {
+  priority: DailyPriority;
+  toDate: string;
+} | null;
 
 function buildEditablePriorities(priorities: DailyPriority[]) {
-  const cleanPriorities = normalizeDailyPriorities(priorities);
-  const emptyPriorities = createEmptyDailyPriorities();
-
-  return emptyPriorities.map((emptyPriority, index) => cleanPriorities[index] ?? emptyPriority);
+  return toPrioritySlots(priorities);
 }
 
 function createEmptyDailyPlanForm(): DailyPlanFormState {
@@ -107,6 +110,41 @@ function formatSavedAt(value: string | null) {
   }).format(new Date(value));
 }
 
+function formatShortDate(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(new Date(year, month - 1, day));
+}
+
+function getClosedPriorityLabel(priority: DailyPriority) {
+  const status = getPriorityStatus(priority);
+
+  if (status === "completed") {
+    return "Completada";
+  }
+
+  if (status === "discarded") {
+    return "Descartada";
+  }
+
+  if (status === "postponed") {
+    return `Pospuesta${formatShortDate(priority.postponedToDate) ? ` a ${formatShortDate(priority.postponedToDate)}` : ""}`;
+  }
+
+  return "Pendiente";
+}
+
 async function getResponseError(response: Response, fallback: string) {
   try {
     const payload = (await response.json()) as {
@@ -146,8 +184,13 @@ export function DailyPlanCard({ recommendedAction }: DailyPlanCardProps) {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [initialSnapshot, setInitialSnapshot] = useState("");
   const [failedSnapshot, setFailedSnapshot] = useState<string | null>(null);
+  const [postponeDialog, setPostponeDialog] = useState<PostponeDialogState>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const latestDraftRef = useRef<DailyPlanDraft | null>(null);
   const { priorities, mobilityDone, mobilityMinutes, mobilityFocus, dailyNote } = form;
+  const activePrioritySlots = priorities.slice(0, DAILY_PRIORITY_LIMIT);
+  const extraPendingPriorities = priorities.slice(DAILY_PRIORITY_LIMIT).filter(isActivePriority);
+  const closedPriorities = priorities.slice(DAILY_PRIORITY_LIMIT).filter((priority) => !isActivePriority(priority));
 
   const currentSnapshot = useMemo(
     () => getSnapshot({ priorities, mobilityDone, mobilityMinutes, mobilityFocus, dailyNote }),
@@ -205,6 +248,7 @@ export function DailyPlanCard({ recommendedAction }: DailyPlanCardProps) {
         setSavedAt(payload.entry?.updatedAt ?? null);
         setInitialSnapshot(nextSnapshot);
         setFailedSnapshot(null);
+        setFeedbackMessage(null);
         setStatus(payload.entry ? "loaded" : "empty");
       } catch (loadError) {
         if (!isMounted) {
@@ -227,9 +271,41 @@ export function DailyPlanCard({ recommendedAction }: DailyPlanCardProps) {
     setForm((currentForm) => ({
       ...currentForm,
       priorities: currentForm.priorities.map((priority, priorityIndex) =>
-        priorityIndex === index ? { ...priority, ...partialPriority } : priority,
+        priorityIndex === index
+          ? {
+            ...priority,
+            ...partialPriority,
+            status: partialPriority.done === true ? "completed" : partialPriority.done === false ? "pending" : partialPriority.status ?? priority.status,
+            done: partialPriority.status ? partialPriority.status === "completed" : partialPriority.done ?? priority.done,
+          }
+          : priority,
       ),
     }));
+    setFeedbackMessage(null);
+  }
+
+  function updatePrioritiesWithSlots(nextPriorities: DailyPriority[]) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      priorities: buildEditablePriorities(nextPriorities),
+    }));
+  }
+
+  function updatePriorityStatus(priorityId: string, status: Exclude<DailyPriorityStatus, "postponed">) {
+    const now = new Date().toISOString();
+    const nextPriorities = priorities.map((priority) =>
+      priority.id === priorityId
+        ? {
+          ...priority,
+          status,
+          done: status === "completed",
+          updatedAt: now,
+        }
+        : priority,
+    );
+
+    updatePrioritiesWithSlots(nextPriorities);
+    setFeedbackMessage(status === "completed" ? "Tarea completada." : status === "discarded" ? "Tarea descartada." : null);
   }
 
   function toggleMobilityFocus(focus: string) {
@@ -260,6 +336,7 @@ export function DailyPlanCard({ recommendedAction }: DailyPlanCardProps) {
       });
       setError(null);
       setFailedSnapshot(null);
+      setFeedbackMessage(null);
       setStatus(savedAt ? "loaded" : "empty");
     } catch {
       setForm(createEmptyDailyPlanForm());
@@ -312,6 +389,7 @@ export function DailyPlanCard({ recommendedAction }: DailyPlanCardProps) {
       }
 
       setStatus("saved");
+      return payload.entry;
     } catch (saveError) {
       if (latestDraftRef.current?.snapshot === draft.snapshot) {
         setFailedSnapshot(draft.snapshot);
@@ -319,8 +397,66 @@ export function DailyPlanCard({ recommendedAction }: DailyPlanCardProps) {
 
       setError(saveError instanceof Error ? saveError.message : "No se pudo guardar. Revisa Supabase o la sesión privada.");
       setStatus("error");
+      return null;
     }
   }, [entryDate]);
+
+  async function postponePriority() {
+    if (!postponeDialog) {
+      return;
+    }
+
+    if (postponeDialog.toDate <= entryDate) {
+      setError("Elige una fecha posterior a hoy para posponer.");
+      return;
+    }
+
+    const draft = latestDraftRef.current;
+
+    if (draft && draft.snapshot !== initialSnapshot) {
+      const savedEntry = await saveEntry(draft);
+
+      if (!savedEntry) {
+        return;
+      }
+    }
+
+    setStatus("saving");
+    setError(null);
+    setFailedSnapshot(null);
+
+    try {
+      const response = await fetch("/api/daily-entry/priorities/postpone", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fromDate: entryDate,
+          toDate: postponeDialog.toDate,
+          priorityId: postponeDialog.priority.id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await getResponseError(response, "No se pudo posponer la tarea."));
+      }
+
+      const payload = (await response.json()) as PostponePriorityResponse;
+      const nextForm = createDailyPlanFormFromEntry(payload.fromEntry);
+      const nextSnapshot = getSnapshot(nextForm);
+
+      setForm(nextForm);
+      setInitialSnapshot(nextSnapshot);
+      setSavedAt(payload.fromEntry.updatedAt);
+      setPostponeDialog(null);
+      setFeedbackMessage(`Tarea movida al día seleccionado: ${formatShortDate(postponeDialog.toDate) ?? postponeDialog.toDate}.`);
+      setStatus("saved");
+    } catch (postponeError) {
+      setError(postponeError instanceof Error ? postponeError.message : "No se pudo posponer la tarea.");
+      setStatus("error");
+    }
+  }
 
   useEffect(() => {
     if (!isDirty || status === "loading" || status === "saving" || failedSnapshot === currentSnapshot) {
@@ -337,6 +473,32 @@ export function DailyPlanCard({ recommendedAction }: DailyPlanCardProps) {
 
     return () => window.clearTimeout(saveTimeout);
   }, [currentSnapshot, failedSnapshot, initialSnapshot, isDirty, saveEntry, status]);
+
+  async function savePendingDraftBeforeResolve() {
+    const draft = latestDraftRef.current;
+
+    if (draft && draft.snapshot !== initialSnapshot) {
+      const savedEntry = await saveEntry(draft);
+      return savedEntry !== null;
+    }
+
+    return true;
+  }
+
+  function handlePendingReviewResolved(entry: DailyEntry | null, message: string) {
+    if (entry) {
+      const nextForm = createDailyPlanFormFromEntry(entry);
+      const nextSnapshot = getSnapshot(nextForm);
+
+      setForm(nextForm);
+      setInitialSnapshot(nextSnapshot);
+      setSavedAt(entry.updatedAt);
+      setStatus("saved");
+    }
+
+    setFeedbackMessage(message);
+    setError(null);
+  }
 
   const isLoading = status === "loading";
   const isSaving = status === "saving";
@@ -359,10 +521,17 @@ export function DailyPlanCard({ recommendedAction }: DailyPlanCardProps) {
 
       {recommendedAction ? (
         <div className="mt-4 rounded-md border border-[rgba(34,211,238,0.2)] bg-[var(--accent-faint)] p-3">
-          <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-[var(--accent)]">Acción Hybrid OS</p>
+          <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-[var(--accent)]">Contexto Hybrid OS</p>
           <p className="mt-1 text-sm leading-6 text-[var(--muted-strong)]">{recommendedAction}</p>
         </div>
       ) : null}
+
+      <YesterdayPendingReview
+        date={entryDate}
+        disabled={isSaving}
+        onBeforeResolve={savePendingDraftBeforeResolve}
+        onResolved={handlePendingReviewResolved}
+      />
 
       {error ? (
         <p className="mt-4 rounded-md border border-[rgba(255,110,110,0.28)] bg-[rgba(255,110,110,0.08)] p-3 text-sm font-semibold text-[#ff9b9b]">
@@ -370,36 +539,113 @@ export function DailyPlanCard({ recommendedAction }: DailyPlanCardProps) {
         </p>
       ) : null}
 
+      {feedbackMessage ? (
+        <p className="mt-4 rounded-md border border-[rgba(34,211,238,0.2)] bg-[var(--accent-faint)] p-3 text-sm font-semibold text-[var(--accent-text)]" aria-live="polite">
+          {feedbackMessage}
+        </p>
+      ) : null}
+
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div>
           <p className="text-sm font-black text-[var(--foreground)]">Prioridades</p>
           <div className="mt-3 space-y-2">
-            {priorities.slice(0, DAILY_PRIORITY_LIMIT).map((priority, index) => (
-              <label
+            {activePrioritySlots.map((priority, index) => (
+              <div
                 key={priority.id}
-                className="flex min-h-12 items-center gap-3 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-2 focus-within:border-[var(--accent-border)]"
+                className="flex flex-col gap-2 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-2 focus-within:border-[var(--accent-border)] sm:flex-row sm:items-center"
               >
-                <input
-                  type="checkbox"
-                  checked={priority.done}
-                  disabled={isReadonly}
-                  onChange={(event) => updatePriority(index, { done: event.target.checked })}
-                  className="h-5 w-5 shrink-0 accent-[var(--accent)]"
-                  aria-label={`Marcar prioridad ${index + 1} como hecha`}
-                />
-                <input
-                  type="text"
-                  value={priority.text}
-                  disabled={isReadonly}
-                  onChange={(event) => updatePriority(index, { text: event.target.value })}
-                  placeholder={`Prioridad ${index + 1}`}
-                  className={`min-h-10 w-full min-w-0 rounded-md border border-transparent bg-transparent px-2 text-sm font-semibold text-[var(--foreground)] outline-none placeholder:text-[var(--muted)] disabled:opacity-70 ${
-                    priority.done ? "text-[var(--muted)] line-through" : ""
-                  }`}
-                />
-              </label>
+                <div className="flex min-h-10 min-w-0 flex-1 items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={getPriorityStatus(priority) === "completed"}
+                    disabled={isReadonly || priority.text.trim().length === 0}
+                    onChange={(event) =>
+                      event.target.checked
+                        ? updatePriorityStatus(priority.id, "completed")
+                        : updatePriority(index, { done: false, status: "pending" })
+                    }
+                    className="h-5 w-5 shrink-0 accent-[var(--accent)]"
+                    aria-label={`Completar prioridad ${index + 1}`}
+                  />
+                  <input
+                    type="text"
+                    value={priority.text}
+                    disabled={isReadonly}
+                    onChange={(event) => updatePriority(index, { text: event.target.value, status: "pending", done: false })}
+                    placeholder={`Prioridad ${index + 1}`}
+                    className="min-h-10 w-full min-w-0 rounded-md border border-transparent bg-transparent px-2 text-sm font-semibold text-[var(--foreground)] outline-none placeholder:text-[var(--muted)] disabled:opacity-70"
+                    aria-label={`Texto de prioridad ${index + 1}`}
+                  />
+                </div>
+                {priority.text.trim().length > 0 ? (
+                  <div className="flex flex-wrap gap-2 sm:justify-end">
+                    <button
+                      type="button"
+                      disabled={isReadonly}
+                      onClick={() => updatePriorityStatus(priority.id, "completed")}
+                      className="min-h-9 rounded-md border border-[rgba(34,211,238,0.24)] bg-[var(--accent-faint)] px-3 text-xs font-black text-[var(--accent-text)] transition hover:border-[var(--accent-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      Completar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isReadonly}
+                      onClick={() => setPostponeDialog({ priority, toDate: addDaysToDateKey(entryDate, 1) })}
+                      className="min-h-9 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.035)] px-3 text-xs font-black text-[var(--muted-strong)] transition hover:border-[var(--accent-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      Posponer
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isReadonly}
+                      onClick={() => updatePriorityStatus(priority.id, "discarded")}
+                      className="min-h-9 rounded-md border border-[rgba(255,255,255,0.1)] bg-[rgba(244,247,244,0.025)] px-3 text-xs font-black text-[var(--muted)] transition hover:border-[rgba(255,110,110,0.4)] hover:text-[#ffb4b4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      Descartar
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             ))}
           </div>
+
+          {extraPendingPriorities.length > 0 ? (
+            <div className="mt-4 rounded-md border border-[rgba(255,255,255,0.08)] bg-[rgba(244,247,244,0.02)] p-3">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--muted)]">Más tareas pendientes</p>
+              <div className="mt-2 space-y-2">
+                {extraPendingPriorities.map((priority) => (
+                  <p key={priority.id} className="text-sm font-semibold text-[var(--muted-strong)]">
+                    {priority.text}
+                    {priority.postponedFromDate ? (
+                      <span className="ml-2 text-xs text-[var(--muted)]">desde {formatShortDate(priority.postponedFromDate)}</span>
+                    ) : null}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {closedPriorities.length > 0 ? (
+            <div className="mt-4 rounded-md border border-[rgba(255,255,255,0.08)] bg-[rgba(244,247,244,0.02)] p-3">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--muted)]">Cerradas hoy</p>
+              <div className="mt-2 space-y-2">
+                {closedPriorities.map((priority) => {
+                  const status = getPriorityStatus(priority);
+
+                  return (
+                    <div key={priority.id} className="flex flex-col gap-1 rounded-md border border-[rgba(255,255,255,0.06)] bg-[rgba(7,10,9,0.32)] p-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className={`text-sm font-semibold ${status === "completed" ? "text-[var(--muted-strong)] line-through" : "text-[var(--muted)]"}`}>
+                        {priority.text}
+                      </p>
+                      <span className="w-fit rounded-full border border-[rgba(255,255,255,0.08)] px-2 py-1 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[var(--muted-strong)]">
+                        {getClosedPriorityLabel(priority)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-5">
@@ -491,6 +737,66 @@ export function DailyPlanCard({ recommendedAction }: DailyPlanCardProps) {
           </p>
         ) : null}
       </div>
+
+      {postponeDialog ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="postpone-priority-title">
+          <div className="w-full max-w-md rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[0.7rem] font-bold uppercase tracking-[0.18em] text-[var(--accent)]">Posponer tarea</p>
+                <h4 id="postpone-priority-title" className="mt-1 text-xl font-black text-[var(--foreground)]">
+                  Elegir fecha
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPostponeDialog(null)}
+                className="rounded-md border border-[var(--line)] px-3 py-2 text-xs font-black text-[var(--muted-strong)] transition hover:border-[var(--accent-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <p className="mt-4 rounded-md border border-[rgba(255,255,255,0.08)] bg-[rgba(244,247,244,0.025)] p-3 text-sm font-semibold leading-6 text-[var(--muted-strong)]">
+              {postponeDialog.priority.text}
+            </p>
+
+            <label className="mt-4 grid gap-2 text-sm font-black text-[var(--foreground)]">
+              Nueva fecha
+              <input
+                type="date"
+                min={entryDate}
+                value={postponeDialog.toDate}
+                onChange={(event) => setPostponeDialog((currentDialog) => currentDialog ? { ...currentDialog, toDate: event.target.value } : currentDialog)}
+                className="min-h-11 rounded-md border border-[var(--line)] bg-[rgba(7,10,9,0.52)] px-3 text-sm font-bold text-[var(--foreground)] outline-none focus:border-[var(--accent-border)]"
+              />
+            </label>
+
+            {postponeDialog.toDate <= entryDate ? (
+              <p className="mt-2 text-xs font-semibold text-[#ffb4b4]">Elige una fecha posterior a hoy.</p>
+            ) : null}
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => setPostponeDialog(null)}
+                className="min-h-11 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.035)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isSaving || postponeDialog.toDate <= entryDate}
+                onClick={() => void postponePriority()}
+                className="min-h-11 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-4 py-2 text-sm font-black text-[var(--accent-text)] transition hover:bg-[var(--accent-faint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Posponer
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </Card>
   );
 }

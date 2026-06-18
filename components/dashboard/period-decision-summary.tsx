@@ -46,9 +46,6 @@ export function PeriodDecisionSummary({
           <div key={signal.id} className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
             <p className="text-sm font-bold text-[var(--foreground)]">{signal.title}</p>
             <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{signal.evidence[0] ?? signal.message}</p>
-            {signal.recommendation ? (
-              <p className="mt-2 text-sm font-semibold leading-6 text-[var(--foreground)]">{signal.recommendation}</p>
-            ) : null}
           </div>
         ))}
       </div>

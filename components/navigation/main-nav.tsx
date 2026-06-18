@@ -10,6 +10,7 @@ const navSections = [
       { href: "/", label: "Home", marker: "O" },
       { href: "/dashboard", label: "Dashboard", marker: "A" },
       { href: "/analysis", label: "Análisis", marker: "A" },
+      { href: "/goals", label: "Objetivos", marker: "G" },
     ],
   },
   {
@@ -26,7 +27,6 @@ const navSections = [
     items: [
       { href: "/body", label: "Body Check", marker: "B" },
       { href: "/nutrition", label: "Nutrición", marker: "N" },
-      { href: "/goals", label: "Objetivos", marker: "G" },
     ],
   },
 ];

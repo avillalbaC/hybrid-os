@@ -8,6 +8,7 @@ import {
   upsertNutritionCheck,
   upsertRemoteTrainingSession,
 } from "@/lib/supabase/training-sessions";
+import { findInternalDuplicateSessionIds } from "@/lib/imports/import-diagnostics";
 import { coercePartialSession, normalizeHybridOSInput, validateHistoricalSessions, type ValidationIssue } from "@/lib/validation/hybrid-os-input";
 import type { HybridOSAppInput, SessionStatus, TrainingSession } from "@/types/training";
 
@@ -143,6 +144,14 @@ export async function saveAppInputs(rawInputs: unknown, options: SaveAppInputsOp
     throw error;
   }
   console.info("[Hybrid OS import] validation: ok");
+
+  const internalDuplicateIds = findInternalDuplicateSessionIds(validation.value);
+
+  if (internalDuplicateIds.length > 0) {
+    const error = new Error("Duplicate sessions inside appInput array.");
+    Object.assign(error, { duplicateIds: internalDuplicateIds, internalDuplicateIds });
+    throw error;
+  }
 
   const result: SaveAppInputsResult = {
     ok: true,

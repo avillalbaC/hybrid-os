@@ -1,6 +1,6 @@
 # Hybrid OS - Current State
 
-Snapshot: 2026-06-17
+Snapshot: 2026-06-18
 
 Este documento describe el estado real del proyecto en este snapshot. No debe usarse para guardar metricas que cambian cada dia, salvo que se marquen explicitamente como snapshot.
 
@@ -58,6 +58,8 @@ Tablas principales:
 - `body_checks`: body checks opcionales importados, con `user_id` cuando existan.
 - `nutrition_checks`: nutrition checks opcionales importados, con `user_id` cuando existan.
 - `daily_entries`: plan diario manual por usuario y fecha, con prioridades, movilidad y nota rapida.
+- `goal_blocks`: bloques de objetivo activo por usuario, con perfil, targets semanales, notas, RLS y estado.
+- `planned_sessions`: sesiones previstas por usuario y fecha, relacionadas opcionalmente con `goal_blocks`, para plan semanal y planificado vs realizado.
 
 Columnas analiticas relevantes en `training_sessions`:
 
@@ -101,7 +103,7 @@ Politica vigente:
 - `/muscle-load`: analisis de carga muscular.
 - `/body`: pantalla Body, actualmente no es prioridad.
 - `/nutrition`: pantalla Nutrition, actualmente no es prioridad.
-- `/goals`: pantalla Goals, actualmente no es prioridad.
+- `/goals`: seguimiento del objetivo activo, progreso, senales a favor, senales en contra, datos insuficientes, contexto copiable para check diario y Plan semanal beta/opcional.
 
 ### API
 
@@ -113,6 +115,16 @@ Politica vigente:
 - `GET /api/daily-entry?date=YYYY-MM-DD`: devuelve la entrada diaria propia o `null`.
 - `PUT /api/daily-entry`: crea o actualiza la entrada diaria propia para una fecha.
 - `GET /api/daily-entry/range?start=YYYY-MM-DD&end=YYYY-MM-DD`: devuelve entradas diarias propias para un rango.
+- `POST /api/daily-entry/priorities/postpone`: marca una prioridad como pospuesta y crea la copia pendiente en la fecha destino.
+- `GET /api/goals`: devuelve objetivos propios y objetivo activo.
+- `POST /api/goals`: crea un bloque de objetivo propio y pausa otros activos si procede.
+- `GET /api/goals/active`: devuelve el objetivo activo propio.
+- `PUT /api/goals/active`: actualiza el objetivo activo propio o lo crea si no existe.
+- `GET /api/planned-sessions`: devuelve sesiones planificadas propias por rango semanal o rango indicado.
+- `POST /api/planned-sessions`: crea una sesion planificada propia.
+- `PATCH /api/planned-sessions/:id`: edita una sesion planificada propia o cambia su estado.
+- `DELETE /api/planned-sessions/:id`: borra una sesion planificada propia.
+- `GET /api/planning/weekly-summary`: devuelve resumen planificado vs realizado de la semana.
 
 Las rutas API privadas estan protegidas por Supabase Auth y deben respetar RLS.
 
@@ -124,12 +136,14 @@ Flujo actual:
 2. Pega un `HybridOSAppInput` o un array de inputs.
 3. `parseHybridOSJsonInput()` valida estructura, enums, metricas, bloques, ejercicios, body check opcional y nutrition check opcional.
 4. La UI muestra preview antes de guardar.
-5. La UI detecta posibles duplicados usando las sesiones disponibles en cliente.
-6. Al guardar, llama a la API privada de imports.
-7. `POST /api/imports` vuelve a validar en servidor.
-8. El servidor opera en contexto del usuario autenticado.
-9. El servidor evita duplicados por usuario y session id.
-10. Si no hay duplicado, guarda con `user_id`:
+5. En running puro, la UI permite completar `trainingSession.equipment.shoes` y subir el input a v1.1 de forma aditiva.
+6. La UI detecta posibles duplicados usando las sesiones disponibles en cliente.
+7. El dry-run valida contra servidor y duplicados sin escribir en Supabase.
+8. Al guardar, llama a la API privada de imports.
+9. `POST /api/imports` vuelve a validar en servidor.
+10. El servidor opera en contexto del usuario autenticado.
+11. El servidor evita duplicados por usuario y session id.
+12. Si no hay duplicado, guarda con `user_id`:
     - `raw_imports`
     - `training_sessions`
     - `training_exercises`
@@ -159,25 +173,32 @@ Reglas que deben preservarse:
 - RLS activo.
 - APIs privadas protegidas.
 - Modelo `HybridOSAppInput` y `TrainingSession`.
+- `HybridOSAppInput` acepta v1.0 y v1.1; v1.1 esta limitado hoy a `trainingSession.equipment.shoes`.
 - Validacion cliente y servidor del importador.
 - Preview del importador.
+- Dry-run del importador sin escritura.
 - Importador funcional con `user_id`.
 - Persistencia en Supabase de sesiones, raw imports, ejercicios, body checks y nutrition checks.
 - Endpoint dedicado para Dashboard.
 - Dashboard con periodos calendarizados y metricas agregadas.
-- Dashboard decision refactor: KPIs principales, lectura del periodo, riesgos, decision recomendada, tendencias clave y preview de informes.
+- Dashboard decision refactor: KPIs principales, lectura del periodo, riesgos, contexto para decision, tendencias clave y preview de informes.
 - Ruta `/analysis` para informes semanales/mensuales, tendencias completas, evidencias y calidad de datos.
-- Post-refactor polish: tabs mobile de Analysis sin scrollbar nativa, copy de decision mas accionable y acciones priorizadas de calidad de datos.
+- Post-refactor polish: tabs mobile de Analysis sin scrollbar nativa, copy de decision mas claro y mejoras priorizadas de calidad de datos.
 - Capa Visual Analytics: componentes reutilizables en `components/charts`, datasets en `lib/analytics/chart-data.ts` y graficos ligeros en Dashboard, Analysis, Running, Muscle Load y Home.
-- Daily Plan MVP en Home: `daily_entries` con RLS, API privada, tres prioridades, movilidad, foco y nota rapida.
+- Running muestra volumen por zapatilla cuando existe `equipment.shoes`.
+- Daily Plan en Home: `daily_entries` con RLS, API privada, tres prioridades activas, acciones de completar/descartar/posponer, movilidad, foco y nota rapida.
+- Objetivos activos MVP: `goal_blocks` con RLS, perfiles predefinidos, API privada, `/goals`, evaluacion semanal y resumen goal-aware en Home, Dashboard y Analysis.
+- Goals seguimiento: `/goals` ya no actua como planificador principal; prepara progreso, evidencia y contexto objetivo para el check diario con ChatGPT.
+- Plan semanal / Programaciones MVP: `planned_sessions` con RLS, CRUD privado, comparacion planificado vs realizado y resumen en Home, Dashboard y Analysis.
 - Training Log, detalle, weekly, running y muscle load funcionales sobre la capa actual de sesiones.
 - BodyHeatmap actual simplificado: ranking, barras y placeholder visual en vez de muneco generado por codigo.
 
 ## Reparto de responsabilidades UI
 
 - Home: centro de mando diario rapido. Debe responder que esta pasando ahora, cual es el plan de hoy, cual fue el ultimo entrenamiento, que senales vigilar y a donde ir.
-- Dashboard: centro de decision del periodo actual. Debe priorizar KPIs, lectura ejecutiva, riesgos principales, una decision recomendada, tendencias clave y previews.
-- Analysis: vista profunda. Contiene analisis completo, informes semanales y mensuales, tendencias completas agrupadas y calidad de datos.
+- Dashboard: panel de estado del periodo actual. Debe priorizar KPIs, lectura ejecutiva, riesgos principales, contexto para decision, tendencias clave y previews.
+- Analysis: vista profunda. Contiene analisis completo, informes semanales y mensuales, tendencias completas agrupadas, calidad de datos y contexto para check diario.
+- Objetivos: seguimiento del objetivo activo. Muestra progreso, senales a favor, senales en contra, datos insuficientes y contexto copiable. El Plan semanal queda como beta/opcional.
 - Running: analisis especifico de carrera. No debe repetir lectura global salvo enlace a Analysis.
 - Muscle Load: analisis especifico de carga muscular. No debe repetir informes ni lectura global salvo enlace a Analysis.
 
@@ -195,7 +216,7 @@ Estado: primera capa implementada y pulida para decision.
 - Home mantiene solo mini sparklines en KPIs del hero para no convertirse en dashboard.
 - `ChartCard` soporta valor actual, referencia compacta, estado, empty state y modo compacto.
 - Las cards visuales importantes muestran unidad, valor actual, media/cambio cuando existe y un insight corto.
-- Calidad de datos muestra acciones priorizadas e impacto de cada falta relevante.
+- Calidad de datos muestra mejoras priorizadas e impacto de cada falta relevante.
 
 Regla de producto:
 
@@ -209,14 +230,14 @@ Regla de producto:
 - Implementar parser de check pegado para daily/body cuando se cierre el formato.
 - Preparar futura importacion desde Google Drive sin activarla todavia.
 - Crear revision semanal basada en `daily_entries` cuando haya uso real suficiente.
-- Mejorar feedback limpio del importador: errores, warnings, duplicados, estados de guardado y dry-run.
+- Mejorar feedback limpio del importador donde el uso real siga mostrando friccion.
 - Anadir loading states globales y consistentes en pantallas prioritarias.
-- Implementar `HybridOSAppInput` v1.1 enfocado primero en zapatillas running.
-- Preparar volumen por zapatilla.
+- Ampliar `HybridOSAppInput` v1.1 solo si hay uso real de nuevos campos.
+- Preparar mayor detalle por zapatilla cuando haya datos suficientes.
 - QA/calibracion final de la nueva separacion Home / Dashboard / Analysis con uso real.
-- Hacer auditoria responsive/mobile de pantallas prioritarias.
+- Hacer auditoria responsive/mobile actual de pantallas prioritarias.
 - Conectar `/body` y `/nutrition` a Supabase como siguiente bloque no prioritario de training.
-- Conectar `/goals` a datos reales.
+- Importador de programaciones desde texto hacia `planned_sessions`, con preview antes de guardar.
 - Decidir e integrar un asset GLB real para BodyHeatmap 3D en una fase futura.
 - Anadir PWA basica mas adelante, despues de estabilizar la experiencia privada y mobile.
 - Anadir pruebas automaticas para el flujo critico de importacion, fuente de datos, auth/RLS y fallback.

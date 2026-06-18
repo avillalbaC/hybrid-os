@@ -10,10 +10,10 @@ import { getSessionRunMeters, getTotalRunExposureMeters } from "@/lib/domain/tra
 import { getSecondaryActivityKind, isSecondaryActivity } from "@/lib/domain/training/secondary-activity";
 import { calculateTotalDuration } from "@/lib/selectors/training";
 import { useTrainingSessions, type TrainingSessionWithSync } from "@/lib/storage/use-training-sessions";
-import { formatDataQuality, formatDuration, formatKm as formatDistanceKm, formatTag, formatTrainingType } from "@/lib/utils/format";
+import { formatDataQuality, formatDuration, formatKm as formatDistanceKm, formatLoadKg, formatTag, formatTrainingType } from "@/lib/utils/format";
 import type { TrainingSession, TrainingSessionType } from "@/types/training";
 
-type TypeFilter = "all" | TrainingSessionType | "recovery" | "secondary" | "padel" | "routes-walks";
+type TypeFilter = "all" | TrainingSessionType | "partial" | "recovery" | "secondary" | "padel" | "routes-walks";
 type SortMode = "recent" | "oldest" | "duration" | "rpe";
 
 type SessionGroup = {
@@ -31,6 +31,7 @@ const typeFilters: Array<{ value: TypeFilter; label: string }> = [
   { value: "fuerza", label: "Fuerza" },
   { value: "halterofilia", label: "Halterofilia" },
   { value: "gimnasticos", label: "Gimnásticos" },
+  { value: "partial", label: "Parciales" },
   { value: "recovery", label: "Movilidad / recovery" },
   { value: "secondary", label: "Actividad secundaria" },
   { value: "padel", label: "Pádel" },
@@ -45,7 +46,35 @@ const sortModes: Array<{ value: SortMode; label: string }> = [
 ];
 
 function getSessionSearchText(session: TrainingSession) {
-  return [session.title, formatTrainingType(session.type), session.type, session.tags.join(" ")]
+  const blockText = session.blocks
+    .flatMap((block) => [
+      block.name,
+      block.format,
+      block.blockResult,
+      block.notes,
+      ...block.exercises.flatMap((exercise) => [
+        exercise.name,
+        exercise.canonicalName,
+        exercise.movementPattern,
+        exercise.notes,
+      ]),
+    ])
+    .filter(Boolean)
+    .join(" ");
+
+  return [
+    session.title,
+    session.objective,
+    session.notes,
+    session.result?.score,
+    session.result?.notes,
+    formatTrainingType(session.type),
+    session.type,
+    session.subtypes.join(" "),
+    session.tags.join(" "),
+    session.pendingFields.join(" "),
+    blockText,
+  ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -58,6 +87,10 @@ function matchesTypeFilter(session: TrainingSession, filter: TypeFilter) {
 
   if (filter === "recovery") {
     return session.type === "movilidad" || session.subtypes.includes("mobility") || session.tags.some((tag) => ["mobility", "recovery", "movilidad"].includes(tag));
+  }
+
+  if (filter === "partial") {
+    return session.status === "partial" || session.dataQuality === "partial" || session.pendingFields.length > 0;
   }
 
   if (filter === "secondary") {
@@ -167,6 +200,25 @@ function getSessionScore(session: TrainingSession) {
   return session.objective ?? session.notes;
 }
 
+function getPrimarySubtypes(session: TrainingSession) {
+  return session.subtypes
+    .filter((subtype) => subtype !== session.type)
+    .slice(0, 3);
+}
+
+function getExternalLoadLabel(session: TrainingSession) {
+  const load = session.sessionMetrics.totalExternalLoadKg;
+  return typeof load === "number" && load > 0 ? formatLoadKg(load) : null;
+}
+
+function getPendingLabel(session: TrainingSession) {
+  if (session.pendingFields.length === 0) {
+    return null;
+  }
+
+  return `${session.pendingFields.length} pendiente${session.pendingFields.length === 1 ? "" : "s"}`;
+}
+
 function sortSessions(sessions: TrainingSessionWithSync[], sortMode: SortMode) {
   return [...sessions].sort((a, b) => {
     if (sortMode === "oldest") {
@@ -210,11 +262,15 @@ function groupSessionsByDate(sessions: TrainingSessionWithSync[]) {
 function SessionRow({ session }: { session: TrainingSessionWithSync }) {
   const isPending = session.pendingSync || session.dataSource === "local-pending";
   const score = getSessionScore(session);
+  const subtypes = getPrimarySubtypes(session);
   const visibleTags = session.tags.slice(0, 5);
   const hiddenTags = Math.max(session.tags.length - visibleTags.length, 0);
+  const runMeters = getSessionRunMeters(session);
+  const externalLoad = getExternalLoadLabel(session);
+  const pendingLabel = getPendingLabel(session);
 
   return (
-    <article className="grid gap-3 border-t border-[var(--line)] bg-[rgba(244,247,244,0.018)] px-3 py-3 transition hover:bg-[var(--accent-faint)] md:grid-cols-[84px_minmax(0,1fr)_auto] md:items-center md:px-4">
+    <article className="grid gap-3 border-t border-[var(--line)] bg-[rgba(244,247,244,0.018)] px-3 py-3 transition hover:bg-[var(--accent-faint)] md:grid-cols-[84px_minmax(0,1fr)_minmax(220px,auto)] md:items-center md:px-4">
       <div className="flex items-center gap-2 md:block">
         <p className="font-mono text-xs font-black uppercase tracking-[0.12em] text-[var(--accent)]">{formatCompactDate(session.date)}</p>
         {isPending ? <Badge tone="warning">pendingSync</Badge> : null}
@@ -223,7 +279,13 @@ function SessionRow({ session }: { session: TrainingSessionWithSync }) {
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone="accent">{formatTrainingType(session.type)}</Badge>
-          <Badge>{formatDataQuality(session.dataQuality)}</Badge>
+          {subtypes.map((subtype) => (
+            <Badge key={subtype}>{formatTag(subtype)}</Badge>
+          ))}
+          <Badge tone={session.dataQuality === "partial" || session.status === "partial" ? "warning" : "neutral"}>
+            {formatDataQuality(session.dataQuality)}
+          </Badge>
+          {pendingLabel ? <Badge tone="warning">{pendingLabel}</Badge> : null}
           {session.dataSource === "remote" ? <Badge tone="accent">Supabase</Badge> : null}
           {session.dataSource === "seed" ? <Badge>Seed</Badge> : null}
         </div>
@@ -243,13 +305,14 @@ function SessionRow({ session }: { session: TrainingSessionWithSync }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-4 md:min-w-[420px]">
-        <p className="font-mono text-xs font-black text-[var(--foreground)]">{formatDuration(session.durationMinutes)}</p>
-        <p className="font-mono text-xs font-black text-[var(--foreground)]">RPE {session.rpe ?? "-"}</p>
-        <p className="font-mono text-xs font-black text-[var(--foreground)]">{formatKm(getSessionRunMeters(session))}</p>
+      <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-5 md:min-w-[430px]">
+        <p className="rounded border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-2 py-1 font-mono text-xs font-black text-[var(--foreground)]">{formatDuration(session.durationMinutes)}</p>
+        <p className="rounded border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-2 py-1 font-mono text-xs font-black text-[var(--foreground)]">RPE {session.rpe ?? "-"}</p>
+        <p className="rounded border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-2 py-1 font-mono text-xs font-black text-[var(--foreground)]">{formatKm(runMeters)}</p>
+        <p className="rounded border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-2 py-1 font-mono text-xs font-black text-[var(--foreground)]">{externalLoad ?? "Sin kg"}</p>
         <Link
           href={`/training/${session.id}`}
-          className="inline-flex justify-center rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-2.5 py-1.5 text-xs font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] hover:text-[var(--accent-strong)]"
+          className="inline-flex min-h-8 items-center justify-center rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-2.5 py-1.5 text-xs font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] hover:text-[var(--accent-strong)]"
         >
           Ver detalle
         </Link>
@@ -286,9 +349,12 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
   const rpeSummary = getAverageRpeSummary(filteredSessions);
   const totalRunMeters = getTotalRunExposureMeters(filteredSessions);
   const frequentTypes = getFrequentTypes(filteredSessions);
+  const partialSessions = filteredSessions.filter((session) => session.status === "partial" || session.dataQuality === "partial").length;
+  const pendingFieldsCount = filteredSessions.reduce((total, session) => total + session.pendingFields.length, 0);
   const groupedSessions = useMemo(() => groupSessionsByDate(filteredSessions), [filteredSessions]);
   const isRemoteError = source === "seed-fallback" && Boolean(remoteError);
   const sourceBadge = getSourceBadge(source);
+  const isLoading = source === "loading";
   const hasAnySessions = sessions.length > 0;
   const hasActiveFilters = typeFilter !== "all" || period !== "all" || query.trim().length > 0;
 
@@ -361,6 +427,9 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
         <div className="sm:col-span-2 xl:col-span-1">
           <p className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Tipos frecuentes</p>
           <p className="mt-2 text-sm font-semibold leading-5 text-[var(--foreground)]">{frequentTypes || "-"}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {partialSessions} parciales · {pendingFieldsCount} campos pendientes
+          </p>
         </div>
       </section>
 
@@ -371,7 +440,7 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Título, tag o tipo"
+              placeholder="Título, tipo, tag, ejercicio o nota"
               className="mt-2 w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--accent-border-strong)]"
             />
           </label>
@@ -449,12 +518,23 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
         </section>
       ) : null}
 
-      {!hasAnySessions ? (
+      {isLoading ? (
+        <Card>
+          <p className="text-lg font-semibold">Cargando entrenamientos.</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Consultando Supabase y preparando el histórico.</p>
+        </Card>
+      ) : !hasAnySessions ? (
         <Card>
           <p className="text-lg font-semibold">No hay entrenamientos disponibles.</p>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
             Cuando Supabase devuelva sesiones reales aparecerán aquí. Si hay sesiones locales, se mostrarán como pendientes hasta sincronizarse.
           </p>
+          <Link
+            href="/training/import"
+            className="mt-4 inline-flex rounded-md border border-[var(--accent-border)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)]"
+          >
+            Importar entrenamiento
+          </Link>
         </Card>
       ) : filteredSessions.length > 0 ? (
         <section className="space-y-4">
@@ -478,6 +558,13 @@ export function TrainingLogView({ seedSessions }: { seedSessions: TrainingSessio
         <Card>
           <p className="text-lg font-semibold">No hay sesiones con estos filtros.</p>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Prueba con otro periodo, limpia la búsqueda o cambia el tipo de entrenamiento.</p>
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="mt-4 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)]"
+          >
+            Limpiar filtros
+          </button>
         </Card>
       )}
     </>

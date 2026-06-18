@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { isPureRunningSession } from "@/lib/domain/training/session-kind";
 import { addShoesToHybridOSJson } from "@/lib/imports/app-input-json";
+import { findInternalDuplicateSessionIds, findPotentialDuplicateMatches, type PotentialDuplicateMatch } from "@/lib/imports/import-diagnostics";
 import { getTopMuscles } from "@/lib/selectors/training";
 import {
   dryRunRemoteAppInputs,
@@ -266,6 +267,8 @@ type ValidationState = {
   warnings: ImportIssue[];
   normalizationChanges: ImportIssue[];
   duplicates: string[];
+  internalDuplicates: string[];
+  potentialDuplicates: PotentialDuplicateMatch[];
   repairedText?: string;
   normalizedText?: string;
   autoRepaired?: boolean;
@@ -301,9 +304,11 @@ type ImportSaveStatus = "idle" | "validating" | "ready" | "simulating" | "saving
 type SaveSuccessState = {
   message: string;
   savedSessionIds: string[];
+  savedRawImports: number;
   savedExercises: number;
   savedBodyChecks: number;
   savedNutritionChecks: number;
+  warningCount: number;
 };
 
 type DryRunSuccessState = {
@@ -542,13 +547,19 @@ function buildMainFeedback(
   }
 
   if (saveStatus === "duplicate" || validation.duplicates.length > 0) {
+    const hasInternalDuplicates = validation.internalDuplicates.length > 0;
+
     return {
       tone: "warning",
       indicator: "=",
       eyebrow: "Duplicado detectado",
-      title: "Sesión duplicada",
-      description: "El JSON es válido, pero una sesión con el mismo id ya existe. No se guardará otro duplicado desde este importador.",
-      action: "Siguiente: abre la sesión existente o cambia el id solo si realmente es una sesión distinta.",
+      title: hasInternalDuplicates ? "IDs repetidos dentro del array" : "Sesión ya importada para este usuario",
+      description: hasInternalDuplicates
+        ? "El JSON es válido, pero el array contiene dos o más sesiones con el mismo id. No se guardará nada todavía."
+        : "El JSON es válido, pero una sesión con el mismo id ya existe. No se guardará otro duplicado desde este importador.",
+      action: hasInternalDuplicates
+        ? "Siguiente: deja una sola sesión por id y valida de nuevo."
+        : "Siguiente: abre la sesión existente o cambia el id solo si realmente es una sesión distinta.",
     };
   }
 
@@ -574,25 +585,30 @@ function buildMainFeedback(
     };
   }
 
-  if (validation.status === "valid" && validation.warnings.length > 0) {
+  if (validation.status === "valid" && (validation.warnings.length > 0 || validation.potentialDuplicates.length > 0)) {
+    const sessionCount = validation.preview?.length ?? 0;
+    const potentialDuplicateText = validation.potentialDuplicates.length > 0 ? ` ${validation.potentialDuplicates.length} posible duplicado para revisar.` : "";
+
     return {
       tone: "warning",
       indicator: "!",
       eyebrow: "JSON válido",
       title: "JSON válido con warnings",
-      description: "Los avisos no bloquean el guardado.",
-      action: "Siguiente: revisa los warnings si quieres mejorar la calidad de datos, o guarda en Supabase.",
+      description: `JSON válido. ${sessionCount} ${sessionCount === 1 ? "sesión detectada" : "sesiones detectadas"}. Hay warnings no bloqueantes.${potentialDuplicateText}`,
+      action: "No se ha guardado nada todavía. Puedes guardar, pero estos datos limitarán algunos análisis.",
     };
   }
 
   if (validation.status === "valid") {
+    const sessionCount = validation.preview?.length ?? 0;
+
     return {
       tone: "success",
       indicator: "OK",
       eyebrow: "JSON válido",
       title: "JSON válido",
-      description: "El contrato es válido y no hay warnings.",
-      action: "Siguiente: guarda la sesión en Supabase.",
+      description: `JSON válido. ${sessionCount} ${sessionCount === 1 ? "sesión detectada" : "sesiones detectadas"}. Preview listo.`,
+      action: "No se ha guardado nada todavía. Siguiente: guarda en Supabase.",
     };
   }
 
@@ -636,7 +652,7 @@ function getImportStatusBadge(
     return { label: "JSON inválido", tone: "warning" as const };
   }
 
-  if (validation.status === "valid" && validation.warnings.length > 0) {
+  if (validation.status === "valid" && (validation.warnings.length > 0 || validation.potentialDuplicates.length > 0)) {
     return { label: "Válido con warnings", tone: "warning" as const };
   }
 
@@ -645,6 +661,57 @@ function getImportStatusBadge(
   }
 
   return { label: "Sin validar", tone: "neutral" as const };
+}
+
+type PhaseTone = "idle" | "active" | "done" | "warning" | "error";
+
+function phaseToneClasses(tone: PhaseTone) {
+  if (tone === "done") return "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-strong)]";
+  if (tone === "active") return "border-[var(--line)] bg-[rgba(244,247,244,0.08)] text-[var(--foreground)]";
+  if (tone === "warning") return "border-[rgba(240,196,107,0.32)] bg-[var(--warning-soft)] text-[var(--warning)]";
+  if (tone === "error") return "border-[rgba(255,99,99,0.34)] bg-[rgba(255,99,99,0.08)] text-[#ffb4b4]";
+  return "border-[var(--line)] bg-[rgba(244,247,244,0.025)] text-[var(--muted)]";
+}
+
+function ImportPhaseTracker({
+  hasInput,
+  validation,
+  saveStatus,
+  saveSuccess,
+  saveError,
+}: {
+  hasInput: boolean;
+  validation: ValidationState;
+  saveStatus: ImportSaveStatus;
+  saveSuccess: SaveSuccessState | null;
+  saveError: SaveErrorState | null;
+}) {
+  const parsed = validation.status === "valid" || (validation.status === "error" && !validation.rawParseError && validation.errors.some((issue) => issue.path !== "json"));
+  const hasDuplicate = validation.duplicates.length > 0 || saveStatus === "duplicate";
+  const hasError = validation.status === "error" || Boolean(saveError);
+  const phases: Array<{ label: string; tone: PhaseTone }> = [
+    { label: "Pegado", tone: hasInput ? "done" : "active" },
+    { label: "Parseado", tone: parsed ? "done" : hasError && validation.rawParseError ? "error" : "idle" },
+    { label: "Validado", tone: validation.status === "valid" ? "done" : validation.status === "error" ? "error" : saveStatus === "validating" ? "active" : "idle" },
+    { label: "Preview listo", tone: validation.preview ? "done" : "idle" },
+    { label: "Guardando", tone: saveStatus === "saving" ? "active" : saveSuccess ? "done" : "idle" },
+    { label: "Guardado", tone: saveSuccess ? "done" : "idle" },
+    { label: "Duplicado", tone: hasDuplicate ? "warning" : "idle" },
+    { label: "Error", tone: hasError ? "error" : "idle" },
+  ];
+
+  return (
+    <div className="mt-4 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
+      <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--muted)]">Fases</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {phases.map((phase) => (
+          <span key={phase.label} className={`rounded-md border px-2.5 py-1 text-xs font-bold ${phaseToneClasses(phase.tone)}`}>
+            {phase.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function MainFeedbackPanel({
@@ -714,6 +781,11 @@ function MainFeedbackPanel({
             {dryRunSuccess.result.wouldImport} {dryRunSuccess.result.wouldImport === 1 ? "sesión se podría guardar" : "sesiones se podrían guardar"}.
           </p>
           <p className="mt-1">Fases simuladas: {dryRunSuccess.result.phases.length > 0 ? dryRunSuccess.result.phases.join(", ") : "ninguna"}.</p>
+          <p className="mt-1">
+            Escrituras previstas: {dryRunSuccess.result.wouldSaveSessionIds.length} training_sessions,{" "}
+            {dryRunSuccess.result.wouldSaveSessionIds.length} raw_imports, {dryRunSuccess.result.wouldSaveExercises} training_exercises,{" "}
+            {dryRunSuccess.result.wouldSaveBodyCheckIds.length} body_checks y {dryRunSuccess.result.wouldSaveNutritionCheckIds.length} nutrition_checks.
+          </p>
         </div>
       ) : null}
 
@@ -818,6 +890,94 @@ function IssueList({
   );
 }
 
+function DuplicateDiagnostics({
+  exactDuplicateIds,
+  internalDuplicateIds,
+  duplicateSessions,
+  potentialDuplicates,
+}: {
+  exactDuplicateIds: string[];
+  internalDuplicateIds: string[];
+  duplicateSessions: TrainingSession[];
+  potentialDuplicates: PotentialDuplicateMatch[];
+}) {
+  if (exactDuplicateIds.length === 0 && internalDuplicateIds.length === 0 && potentialDuplicates.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-4">
+      <p className="text-sm font-black text-[var(--warning)]">Duplicados y coincidencias</p>
+      {internalDuplicateIds.length > 0 ? (
+        <div className="mt-3 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
+          <p className="font-semibold text-[var(--foreground)]">Duplicados dentro del JSON</p>
+          <p className="mt-1 text-sm text-[var(--muted-strong)]">
+            El mismo id aparece más de una vez en el array. No se guardará nada hasta dejar un único input por sesión.
+          </p>
+          <ul className="mt-2 space-y-1 font-mono text-xs text-[var(--code-text)]">
+            {internalDuplicateIds.map((id) => (
+              <li key={id}>{id}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {exactDuplicateIds.length > 0 ? (
+        <div className="mt-3 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
+          <p className="font-semibold text-[var(--foreground)]">Duplicados exactos por session id</p>
+          <p className="mt-1 text-sm text-[var(--muted-strong)]">
+            La sesión ya existe para este usuario. El botón Guardar queda deshabilitado para no crear ni reemplazar duplicados.
+          </p>
+          <ul className="mt-3 space-y-2 text-sm text-[var(--muted-strong)]">
+            {duplicateSessions.map((session) => (
+              <li key={session.id} className="rounded-md border border-[var(--line)] p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-semibold text-[var(--foreground)]">{session.title}</p>
+                    <p className="mt-1">{session.date} · {formatTrainingType(session.type)} · <span className="font-mono">{session.id}</span></p>
+                  </div>
+                  <Link href={`/training/${session.id}`} className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+                    Ver sesión existente
+                  </Link>
+                </div>
+              </li>
+            ))}
+            {exactDuplicateIds.filter((id) => !duplicateSessions.some((session) => session.id === id)).map((id) => (
+              <li key={id} className="rounded-md border border-[var(--line)] p-3">
+                <p className="font-semibold text-[var(--foreground)]">Sesión existente o repetida</p>
+                <p className="mt-1 font-mono">{id}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {potentialDuplicates.length > 0 ? (
+        <div className="mt-3 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
+          <p className="font-semibold text-[var(--foreground)]">Posibles duplicados</p>
+          <p className="mt-1 text-sm text-[var(--muted-strong)]">
+            No bloquean el guardado, pero revisa estas coincidencias por misma fecha, tipo y resultado parecido.
+          </p>
+          <ul className="mt-3 space-y-2 text-sm text-[var(--muted-strong)]">
+            {potentialDuplicates.map((match) => (
+              <li key={`${match.inputId}-${match.existingId}`} className="rounded-md border border-[var(--line)] p-3">
+                <p>
+                  Input <span className="font-mono text-[var(--foreground)]">{match.inputId}</span> se parece a{" "}
+                  <Link href={`/training/${match.existingId}`} className="font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
+                    {match.existingTitle}
+                  </Link>
+                  .
+                </p>
+                <p className="mt-1">{match.date} · {formatTrainingType(match.type)} · {match.reason}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function SaveErrorDetails({ error }: { error: SaveErrorState | null }) {
   if (!error) return null;
 
@@ -912,6 +1072,7 @@ function PreviewCard({
   const session = input.trainingSession;
   const topMuscles = getTopMuscles([session], 4);
   const exerciseCount = session.blocks.reduce((total, block) => total + block.exercises.length, 0);
+  const mainExercises = session.blocks.flatMap((block) => block.exercises.map((exercise) => exercise.name)).slice(0, 5);
   const isPureRunning = isPureRunningSession(session);
   const shoes = session.equipment?.shoes?.trim() ?? "";
   const [isAddingShoes, setIsAddingShoes] = useState(false);
@@ -936,9 +1097,19 @@ function PreviewCard({
           <p className="font-mono text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent)]">{session.date}</p>
           <h4 className="mt-1 font-black text-[var(--foreground)]">{session.title}</h4>
         </div>
-        <Badge tone="accent">{formatTrainingType(session.type)}</Badge>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Badge tone="accent">{formatTrainingType(session.type)}</Badge>
+          <Badge>{session.status}</Badge>
+        </div>
       </div>
-      <dl className="mt-4 grid grid-cols-3 gap-2 text-sm">
+      {session.subtypes.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {session.subtypes.map((subtype) => (
+            <Badge key={subtype}>{subtype}</Badge>
+          ))}
+        </div>
+      ) : null}
+      <dl className="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
         <div className="rounded-md border border-[var(--line)] p-2">
           <dt className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Duración</dt>
           <dd className="mt-1 font-mono font-black">{formatDuration(session.durationMinutes)}</dd>
@@ -971,6 +1142,19 @@ function PreviewCard({
           ))}
         </div>
       ) : null}
+      <div className="mt-3 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 text-sm text-[var(--muted-strong)]">
+        <p>
+          Resultado:{" "}
+          <span className="font-semibold text-[var(--foreground)]">
+            {session.result ? `${session.result.type}${session.result.score ? ` · ${session.result.score}` : ""}` : "sin resultado"}
+          </span>
+        </p>
+        {mainExercises.length > 0 ? (
+          <p className="mt-1">
+            Ejercicios principales: <span className="text-[var(--foreground)]">{mainExercises.join(", ")}</span>
+          </p>
+        ) : null}
+      </div>
       {isPureRunning && shoes ? (
         <p className="mt-3 text-sm text-[var(--muted-strong)]">
           Zapatillas: <span className="font-semibold text-[var(--foreground)]">{shoes}</span>
@@ -1041,6 +1225,33 @@ function PreviewCard({
       {session.pendingFields.length > 0 ? (
         <p className="mt-3 text-sm text-[var(--muted)]">Pendiente: {session.pendingFields.join(", ")}</p>
       ) : null}
+      <details className="mt-3 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
+        <summary className="cursor-pointer text-sm font-bold text-[var(--accent)]">Ver bloques y checks</summary>
+        <div className="mt-3 space-y-3 text-sm text-[var(--muted-strong)]">
+          {session.blocks.length > 0 ? (
+            <ul className="space-y-2">
+              {session.blocks.map((block) => (
+                <li key={block.id} className="rounded-md border border-[var(--line)] p-3">
+                  <p className="font-semibold text-[var(--foreground)]">{block.name} · {block.format}</p>
+                  <p className="mt-1">{block.exercises.length} ejercicios{block.blockResult ? ` · ${block.blockResult}` : ""}</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No hay bloques detallados.</p>
+          )}
+          {input.bodyCheck ? (
+            <p>bodyCheck: {input.bodyCheck.date} · peso {input.bodyCheck.weightKg} kg · sueño {input.bodyCheck.sleepHours} h</p>
+          ) : (
+            <p>Sin bodyCheck.</p>
+          )}
+          {input.nutritionCheck ? (
+            <p>nutritionCheck: {input.nutritionCheck.date} · {input.nutritionCheck.estimatedCalories} kcal · {input.nutritionCheck.adherencePercent}% adherencia</p>
+          ) : (
+            <p>Sin nutritionCheck.</p>
+          )}
+        </div>
+      </details>
     </article>
   );
 }
@@ -1064,6 +1275,8 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
     warnings: [],
     normalizationChanges: [],
     duplicates: [],
+    internalDuplicates: [],
+    potentialDuplicates: [],
   });
 
   function validateJson(inputOverride?: string) {
@@ -1084,6 +1297,8 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
         warnings: result.warnings,
         normalizationChanges: result.normalizationChanges,
         duplicates: [],
+        internalDuplicates: [],
+        potentialDuplicates: [],
         repairedText: result.repairedText,
         normalizedText: result.normalizedText,
         autoRepaired: result.autoRepaired,
@@ -1098,23 +1313,32 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
         .filter((session) => (session as { dataSource?: string }).dataSource !== "seed")
         .map((session) => session.id),
     );
-    const duplicates = (result.parsed ?? [])
+    const parsedInputs = result.parsed ?? [];
+    const duplicates = parsedInputs
       .map((input) => input.trainingSession.id)
       .filter((id) => existingIds.has(id));
+    const internalDuplicates = findInternalDuplicateSessionIds(parsedInputs);
+    const potentialDuplicates = findPotentialDuplicateMatches(
+      parsedInputs,
+      existingSessions.filter((session) => (session as { dataSource?: string }).dataSource !== "seed"),
+    );
+    const blockingDuplicates = Array.from(new Set([...duplicates, ...internalDuplicates]));
 
-    setSaveStatus(duplicates.length > 0 ? "duplicate" : "ready");
+    setSaveStatus(blockingDuplicates.length > 0 ? "duplicate" : "ready");
     setValidation({
       status: "valid",
-      message: duplicates.length > 0
-        ? "Contrato válido. Una o más sesiones ya existen; no se guardará un duplicado desde este flujo."
-        : result.warnings.length > 0
+      message: blockingDuplicates.length > 0
+        ? "Contrato válido. Hay duplicados exactos; no se guardará nada desde este flujo."
+        : result.warnings.length > 0 || potentialDuplicates.length > 0
           ? "Contrato válido con warnings no bloqueantes. Puedes guardar, pero conviene revisar la calidad de datos."
           : "Contrato válido. Ya puedes guardar la sesión en la base de datos.",
-      preview: result.parsed,
+      preview: parsedInputs,
       errors: [],
       warnings: result.warnings,
       normalizationChanges: result.normalizationChanges,
-      duplicates,
+      duplicates: blockingDuplicates,
+      internalDuplicates,
+      potentialDuplicates,
       repairedText: result.repairedText,
       normalizedText: result.normalizedText,
       autoRepaired: result.autoRepaired,
@@ -1137,6 +1361,8 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
       warnings: [],
       normalizationChanges: [],
       duplicates: [],
+      internalDuplicates: [],
+      potentialDuplicates: [],
     });
   }
 
@@ -1193,6 +1419,8 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
       warnings: [],
       normalizationChanges: [],
       duplicates: [],
+      internalDuplicates: [],
+      potentialDuplicates: [],
     });
   }
 
@@ -1273,7 +1501,16 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
       setDryRunSuccess(null);
       setSaveSuccess(null);
       setSaveError(null);
-      setValidation({ status: "idle", message: "Backup cargado. Valida el JSON antes de guardar.", errors: [], warnings: [], normalizationChanges: [], duplicates: [] });
+      setValidation({
+        status: "idle",
+        message: "Backup cargado. Valida el JSON antes de guardar.",
+        errors: [],
+        warnings: [],
+        normalizationChanges: [],
+        duplicates: [],
+        internalDuplicates: [],
+        potentialDuplicates: [],
+      });
     } catch {
       setSaveMessage("No se pudo leer el backup como JSON válido.");
       setSaveStatus("error");
@@ -1306,14 +1543,19 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
     try {
       const result = await saveRemoteAppInputs(validation.preview);
       const sessionCount = result.savedSessionIds.length;
+      const bodyCheckCount = result.savedBodyCheckIds.length;
+      const nutritionCheckCount = result.savedNutritionCheckIds.length;
+      const warningCount = validation.warnings.length + validation.normalizationChanges.length + validation.potentialDuplicates.length;
       setSaveMessage(null);
       setSaveStatus("saved");
       setSaveSuccess({
-        message: `${sessionCount} ${sessionCount === 1 ? "sesión guardada" : "sesiones guardadas"} en Supabase. ${result.savedExercises} ejercicios, ${result.savedBodyCheckIds.length} body checks y ${result.savedNutritionCheckIds.length} nutrition checks guardados.`,
+        message: `Guardado: ${sessionCount} ${sessionCount === 1 ? "sesión" : "sesiones"}, ${sessionCount} raw ${sessionCount === 1 ? "import" : "imports"}, ${result.savedExercises} ejercicios normalizados. ${bodyCheckCount > 0 ? `${bodyCheckCount} bodyCheck.` : "Sin bodyCheck."} ${nutritionCheckCount > 0 ? `${nutritionCheckCount} nutritionCheck.` : "Sin nutritionCheck."} ${warningCount} ${warningCount === 1 ? "warning" : "warnings"}.`,
         savedSessionIds: result.savedSessionIds,
+        savedRawImports: sessionCount,
         savedExercises: result.savedExercises,
-        savedBodyChecks: result.savedBodyCheckIds.length,
-        savedNutritionChecks: result.savedNutritionCheckIds.length,
+        savedBodyChecks: bodyCheckCount,
+        savedNutritionChecks: nutritionCheckCount,
+        warningCount,
       });
     } catch (error) {
       if (error instanceof RemoteAppInputImportError) {
@@ -1370,11 +1612,11 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
       }
       setValidation((current) => ({
         ...current,
-        duplicates,
+        duplicates: Array.from(new Set([...current.duplicates, ...duplicates])),
       }));
 
       setDryRunSuccess({
-        message: "Esta sesión se podría guardar. No se han escrito datos.",
+        message: `${result.wouldImport} ${result.wouldImport === 1 ? "sesión se podría guardar" : "sesiones se podrían guardar"}. No se han escrito datos.`,
         result,
       });
     } catch (error) {
@@ -1412,7 +1654,16 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
     setDryRunSuccess(null);
     setSaveSuccess(null);
     setSaveError(null);
-    setValidation({ status: "idle", message, errors: [], warnings: [], normalizationChanges: [], duplicates: [] });
+    setValidation({
+      status: "idle",
+      message,
+      errors: [],
+      warnings: [],
+      normalizationChanges: [],
+      duplicates: [],
+      internalDuplicates: [],
+      potentialDuplicates: [],
+    });
   }
 
   function importAnotherSession() {
@@ -1420,6 +1671,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
     requestAnimationFrame(() => editorRef.current?.focus());
   }
 
+  const remoteDuplicateIds = validation.duplicates.filter((id) => !validation.internalDuplicates.includes(id));
   const duplicateSessions = validation.duplicates
     .map((id) => existingSessions.find((session) => session.id === id))
     .filter((session): session is TrainingSession => Boolean(session));
@@ -1436,8 +1688,8 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
         : "Guardar en Supabase";
   const dryRunButtonCopy = isDryRunning ? "Simulando..." : "Simular guardado";
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
-      <Card>
+    <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
+      <Card className="min-w-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <label htmlFor="app-input" className="text-sm font-semibold">
             HybridOSAppInput JSON
@@ -1473,23 +1725,23 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
           id="app-input"
           value={rawJson}
           onChange={(event) => resetValidationAfterEdit(event.target.value)}
-          className="mt-3 min-h-[520px] w-full resize-y rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-4 font-mono text-sm leading-6 text-[var(--accent-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition focus:border-[var(--accent-border-strong)]"
+          className="mt-3 min-h-[340px] w-full resize-y rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-4 font-mono text-sm leading-6 text-[var(--accent-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition focus:border-[var(--accent-border-strong)] sm:min-h-[520px]"
           spellCheck={false}
         />
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-[var(--muted)]">La app valida JSON estructurado. No interpreta texto libre.</p>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
             <button
               type="button"
               onClick={() => validateJson()}
-              className="rounded-md border border-[var(--accent-border)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)] focus-visible:bg-[var(--accent-hover)]"
+              className="w-full rounded-md border border-[var(--accent-border)] bg-[var(--accent)] px-4 py-2 text-sm font-black text-[var(--accent-foreground)] transition hover:bg-[var(--accent-hover)] focus-visible:bg-[var(--accent-hover)] sm:w-auto"
             >
               Validar JSON
             </button>
             <button
               type="button"
               onClick={formatJsonInput}
-              className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)]"
+              className="w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] sm:w-auto"
             >
               Formatear JSON
             </button>
@@ -1498,7 +1750,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
               onClick={() => {
                 clearImportForm();
               }}
-              className="rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)]"
+              className="w-full rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] sm:w-auto"
             >
               Limpiar
             </button>
@@ -1506,7 +1758,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
               type="button"
               onClick={dryRunValidSessions}
               disabled={!canDryRun}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               {isDryRunning ? <LoadingSpinner /> : null}
               {dryRunButtonCopy}
@@ -1515,7 +1767,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
               type="button"
               onClick={saveValidSessions}
               disabled={!canSave}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-bold text-[var(--foreground)] transition hover:border-[var(--accent-border)] focus-visible:border-[var(--accent-border)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               {isSaving ? <LoadingSpinner /> : null}
               {saveButtonCopy}
@@ -1524,7 +1776,7 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
         </div>
       </Card>
 
-      <Card>
+      <Card className="min-w-0">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">Previsualización</h3>
           <div className="flex flex-wrap justify-end gap-2">
@@ -1535,6 +1787,13 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
             <Badge tone={importStatusBadge.tone}>{importStatusBadge.label}</Badge>
           </div>
         </div>
+        <ImportPhaseTracker
+          hasInput={rawJson.trim().length > 0}
+          validation={validation}
+          saveStatus={saveStatus}
+          saveSuccess={saveSuccess}
+          saveError={saveError}
+        />
         <MainFeedbackPanel
           feedback={mainFeedback}
           dryRunSuccess={dryRunSuccess}
@@ -1604,38 +1863,17 @@ export function JsonImportForm({ seedSessions }: { seedSessions: TrainingSession
           tone="warning"
           onIssueSelect={focusIssueInEditor}
         />
-        {validation.duplicates.length > 0 ? (
-          <div className="mt-4 rounded-md border border-[rgba(240,196,107,0.24)] bg-[var(--warning-soft)] p-4">
-            <p className="text-sm font-black text-[var(--warning)]">Duplicados</p>
-            <p className="mt-2 text-sm text-[var(--muted-strong)]">La sesión ya existe. El botón Guardar en Supabase queda deshabilitado para no crear ni reemplazar duplicados desde este flujo.</p>
-            <ul className="mt-3 space-y-2 text-sm text-[var(--muted-strong)]">
-              {duplicateSessions.map((session) => (
-                <li key={session.id} className="rounded-md border border-[var(--line)] p-3">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="font-semibold text-[var(--foreground)]">{session.title}</p>
-                      <p className="mt-1">{session.date} · {formatTrainingType(session.type)} · <span className="font-mono">{session.id}</span></p>
-                    </div>
-                    <Link href={`/training/${session.id}`} className="text-sm font-bold text-[var(--accent)] transition hover:text-[var(--accent-strong)]">
-                      Ver sesión existente
-                    </Link>
-                  </div>
-                </li>
-              ))}
-              {validation.duplicates.filter((id) => !duplicateSessions.some((session) => session.id === id)).map((id) => (
-                <li key={id} className="rounded-md border border-[var(--line)] p-3">
-                  <p className="font-semibold text-[var(--foreground)]">Sesión existente</p>
-                  <p className="mt-1 font-mono">{id}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <DuplicateDiagnostics
+          exactDuplicateIds={remoteDuplicateIds}
+          internalDuplicateIds={validation.internalDuplicates}
+          duplicateSessions={duplicateSessions}
+          potentialDuplicates={validation.potentialDuplicates}
+        />
         <TechnicalDetails validation={validation} saveError={saveError} />
         {validation.preview ? (
           <div className="mt-4 space-y-3">
             {validation.preview.map((input, inputIndex) => (
-              <div key={input.trainingSession.id} className="space-y-2">
+              <div key={`${input.trainingSession.id}-${inputIndex}`} className="space-y-2">
                 <PreviewCard input={input} inputIndex={inputIndex} onSaveShoes={addShoesToInput} />
               </div>
             ))}
