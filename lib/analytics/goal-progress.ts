@@ -1,4 +1,8 @@
-import { buildCheckInContext } from "@/lib/analytics/check-in-context";
+import {
+  buildCheckInContextData,
+  buildCheckInContextText,
+  buildCompactCheckInContextText,
+} from "@/lib/analytics/check-in-context";
 import { getPeriodRange, isDateInRange } from "@/lib/domain/dashboard/periods";
 import { getStructuredRunningMeters, getTotalRunExposureMeters } from "@/lib/domain/training/run-exposure";
 import { getGoalProfileMeta } from "@/lib/goals/goal-profiles";
@@ -703,6 +707,28 @@ export function getGoalProgressSummary({
   ];
   const overallStatus = getOverallStatus([...positiveSignals, ...negativeSignals, ...insufficientData]);
   const profileMeta = activeGoal ? getGoalProfileMeta(activeGoal.profile) : null;
+  const weekRange = getWeekRange(referenceDate);
+  const checkInContextData = buildCheckInContextData({
+    activeGoal,
+    goalProfileLabel: profileMeta?.title ?? null,
+    period: weekRange
+      ? {
+          label: "Semana actual",
+          startDate: formatDateKey(weekRange.start),
+          endDate: formatDateKey(weekRange.end),
+        }
+      : undefined,
+    generatedAt: referenceDate.toISOString(),
+    referenceDate,
+    sessions,
+    dailyEntries,
+    bodyChecks,
+    nutritionChecks,
+    plannedSessions,
+    positiveSignals,
+    negativeSignals,
+    insufficientData,
+  });
 
   return {
     goalId: activeGoal?.id ?? null,
@@ -714,15 +740,8 @@ export function getGoalProgressSummary({
     positiveSignals,
     negativeSignals,
     insufficientData,
-    checkInContext: buildCheckInContext({
-      goalTitle: activeGoal?.title ?? null,
-      goalProfileLabel: profileMeta?.title ?? null,
-      periodLabel,
-      sessions: metrics.sessions,
-      dailyEntries: metrics.dailyEntries,
-      positiveSignals,
-      negativeSignals,
-      insufficientData,
-    }),
+    checkInContextData,
+    checkInContext: buildCheckInContextText(checkInContextData),
+    compactCheckInContext: buildCompactCheckInContextText(checkInContextData),
   };
 }

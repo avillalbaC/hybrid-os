@@ -30,6 +30,9 @@ Documento operativo para mantener la capa de analisis determinista. No describe 
    - las recomendaciones prescriptivas se reservan para el check diario con ChatGPT;
    - Hybrid OS produce contexto, senales y evidencia;
    - evitar lenguaje imperativo salvo acciones tecnicas de UI.
+   - todo bloque de contexto debe poder copiarse;
+   - los datos insuficientes deben mostrarse de forma explicita;
+   - el texto copiable debe separar senales, evidencia y huecos de datos.
 
 Las tendencias no sustituyen a informes. Los informes usan metricas + tendencias + insights.
 
@@ -148,8 +151,12 @@ Analysis:
 Running:
 
 - Solo carrera: exposicion total, running estructurado, carrera mixta, HYROX sin running estructurado y zapatillas.
+- Debe mostrar arriba "Carga semanal y carrera" para comparar kilometros de carrera con carga no-running normalizada.
+- La carga no-running debe mostrarse como indice relativo o sombreado; no equivale a kilometros y no comparte unidad con el eje Y.
 - Debe mostrar carrera por semana y separar visualmente running estructurado de carrera mixta.
 - Debe explicar que la carrera mixta cuenta como impacto, pero no como running tecnico.
+- La lectura debe preparar contexto objetivo para check diario: senal principal, evidencia, contexto no-running y datos insuficientes.
+- No debe usar ordenes de entrenamiento ni lenguaje prescriptivo en la lectura de carrera.
 - No mostrar core/lumbar, partial o recovery dentro de `Lectura de carrera`.
 - Puede enlazar a Analysis para ver contexto global.
 
@@ -182,6 +189,8 @@ Informes:
 - No tocar Supabase schema.
 - No mezclar seed con Supabase si hay datos reales.
 - No convertir todo warning en alarma.
+- No cerrar la decision diaria dentro de Hybrid OS; la app prepara contexto objetivo para pegar en el check diario.
+- No ocultar datos insuficientes cuando afectan a la lectura del periodo.
 
 ## Limitaciones conocidas
 

@@ -30,12 +30,13 @@ Este roadmap mantiene el foco en datos reales, claridad de analisis y cambios pe
 - Visual Analytics ligera sin libreria externa de charts.
 - Daily Plan en Home con `daily_entries`, prioridades, movilidad, posponer y revision de pendientes de ayer.
 - Objetivos activos MVP con `goal_blocks`, perfiles, evaluacion semanal y contexto copiable.
+- Contexto para check diario v1 centralizado, con texto completo/compacto, boton de copia e integracion en Goals, Analysis, Dashboard y Home.
 - Plan semanal beta con `planned_sessions`, CRUD privado y comparacion planificado vs realizado.
 - Training Log, detalle, weekly, running y muscle load sobre la capa actual de sesiones.
 
 ## Prioridad actual
 
-1. Usar Goals, Dashboard y Analysis como contexto copiable para el check diario.
+1. Usar el contexto copiable v1 durante 7 dias en el check diario.
 2. Calibrar senales a favor, senales en contra y datos insuficientes con uso real.
 3. QA de Goals, Daily Plan y Plan semanal con uso real durante varios dias.
 4. Crear `/daily` para historico y edicion semanal de entradas diarias.

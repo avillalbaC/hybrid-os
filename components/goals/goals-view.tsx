@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ActiveGoalSummaryCard } from "@/components/goals/active-goal-summary-card";
-import { CheckInContextCard } from "@/components/goals/check-in-context-card";
+import { CheckInContextCard } from "@/components/check-in/check-in-context-card";
 import { GoalEmptyState } from "@/components/goals/goal-empty-state";
 import { GoalPlanningBetaSection } from "@/components/goals/goal-planning-beta-section";
 import { GoalProgressOverview } from "@/components/goals/goal-progress-overview";
@@ -362,7 +362,11 @@ export function GoalsView({
             signals={progress.insufficientData}
           />
 
-          <CheckInContextCard context={progress.checkInContext} />
+          <CheckInContextCard
+            context={progress.checkInContextData}
+            text={progress.checkInContext}
+            compactText={progress.compactCheckInContext}
+          />
 
           <GoalPlanningBetaSection
             forceOpen={isPlanningFormOpen || Boolean(editingPlannedSession)}

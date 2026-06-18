@@ -1,5 +1,5 @@
 import { InsightCard, InsightList } from "@/components/analytics/data-insights-panel";
-import { CheckInContextCard } from "@/components/goals/check-in-context-card";
+import { CheckInContextCard } from "@/components/check-in/check-in-context-card";
 import { ChartCard } from "@/components/charts/chart-card";
 import { DisciplineDistributionChart } from "@/components/charts/discipline-distribution-chart";
 import { HorizontalRankingChart } from "@/components/charts/horizontal-ranking-chart";
@@ -172,7 +172,11 @@ export function CurrentAnalysisSection({
 
       <GoalContextCard progress={goalProgress} isLoading={isGoalLoading} />
 
-      <CheckInContextCard context={goalProgress.checkInContext} />
+      <CheckInContextCard
+        context={goalProgress.checkInContextData}
+        text={goalProgress.checkInContext}
+        compactText={goalProgress.compactCheckInContext}
+      />
 
       <PlanningContextCard summary={planningSummary} isLoading={isPlanningLoading} />
 
@@ -270,22 +274,7 @@ export function CurrentAnalysisSection({
         </Card>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[390px_minmax(0,1fr)]">
-        <Card>
-          <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Contexto para check diario</p>
-          <div className="mt-4 space-y-3">
-            {[...goalProgress.positiveSignals.slice(0, 2), ...goalProgress.negativeSignals.slice(0, 2)].length > 0 ? (
-              [...goalProgress.positiveSignals.slice(0, 2), ...goalProgress.negativeSignals.slice(0, 2)].map((signal) => (
-                <p key={signal.id} className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 text-sm font-semibold leading-6 text-[var(--foreground)]">
-                  <span className="block text-xs uppercase tracking-[0.14em] text-[var(--muted)]">{signal.direction === "positive" ? "A favor" : "En contra"}</span>
-                  {signal.label}: <span className="font-medium text-[var(--muted-strong)]">{signal.evidence}</span>
-                </p>
-              ))
-            ) : (
-              <p className="text-sm leading-6 text-[var(--muted)]">Faltan más datos para preparar contexto adicional.</p>
-            )}
-          </div>
-        </Card>
+      <section>
         <Card>
           <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Evidencias</p>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">

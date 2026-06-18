@@ -226,7 +226,7 @@ function buildDeviations({
       severity: activeGoal?.profile === "deload" || activeGoal?.profile === "strength_maintenance" ? "warning" : "info",
       title: "Impacto extra no previsto",
       description: `Se acumularon ${(extraRunExposureMeters / 1000).toFixed(1)} km de carrera no previstos.`,
-      recommendation: "Evita sumar más impacto salvo que sea muy suave.",
+      recommendation: "Dato relevante para valorar impacto adicional y margen de recuperación en el check diario.",
     });
   }
 
@@ -236,7 +236,7 @@ function buildDeviations({
       severity: "critical",
       title: "Descarga con HYROX extra",
       description: "El bloque es de descarga y apareció una sesión HYROX no planificada.",
-      recommendation: "Reduce intensidad el resto de la semana y prioriza recuperación.",
+      recommendation: "Se observa intensidad extra dentro de descarga; útil para valorar margen de recuperación semanal.",
     });
   }
 
@@ -246,7 +246,7 @@ function buildDeviations({
       severity: "warning",
       title: "Movilidad baja con intensidad alta",
       description: "Para recomposición, la combinación de poca movilidad e intensidad alta reduce margen de recuperación.",
-      recommendation: "Añade movilidad hoy y evita convertir la próxima sesión en otro estímulo intenso.",
+      recommendation: "Movilidad registrada por debajo de la referencia junto a intensidad alta.",
     });
   }
 
@@ -256,7 +256,7 @@ function buildDeviations({
       severity: "info",
       title: "No hay plan semanal registrado",
       description: "La lectura de esta semana es descriptiva porque no hay sesiones planificadas.",
-      recommendation: "Crea una sesión planificada para comparar intención y ejecución.",
+      recommendation: "Dato insuficiente: no hay intención semanal registrada para comparar con la ejecución.",
     });
   }
 

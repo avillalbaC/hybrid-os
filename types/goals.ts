@@ -1,3 +1,5 @@
+import type { CheckInContextData } from "@/types/check-in-context";
+
 export type GoalProfile =
   | "recomposition"
   | "running_base"
@@ -130,7 +132,9 @@ export type GoalProgressSummary = {
   positiveSignals: GoalProgressSignal[];
   negativeSignals: GoalProgressSignal[];
   insufficientData: GoalProgressSignal[];
+  checkInContextData: CheckInContextData;
   checkInContext: string;
+  compactCheckInContext: string;
 };
 
 export type GoalBlockInput = {

@@ -194,7 +194,7 @@ export function detectWeeklyLoadSpikes(currentWeek: WeeklyTrainingLoad, previous
       level: "yellow",
       title: "Más de 3 sesiones duras esta semana",
       factors: [`${currentWeek.hardSessions} sesiones duras`],
-      recommendation: "Separar sesiones de alto impacto y priorizar recuperación entre ellas.",
+      recommendation: "Se observa concentración de sesiones duras; dato útil para valorar recuperación entre impactos.",
     });
   }
 

@@ -186,8 +186,11 @@ Reglas que deben preservarse:
 - Post-refactor polish: tabs mobile de Analysis sin scrollbar nativa, copy de decision mas claro y mejoras priorizadas de calidad de datos.
 - Capa Visual Analytics: componentes reutilizables en `components/charts`, datasets en `lib/analytics/chart-data.ts` y graficos ligeros en Dashboard, Analysis, Running, Muscle Load y Home.
 - Running muestra volumen por zapatilla cuando existe `equipment.shoes`.
+- Running incorpora grafica superior "Carga semanal y carrera" con kilometros de carrera, split running/mixto y sombreado de carga no-running normalizada. El sombreado es relativo y no equivale a kilometros.
+- Running incluye contexto objetivo copiable para check diario, con senales de carrera, carga no-running y datos insuficientes.
 - Daily Plan en Home: `daily_entries` con RLS, API privada, tres prioridades activas, acciones de completar/descartar/posponer, movilidad, foco y nota rapida.
 - Objetivos activos MVP: `goal_blocks` con RLS, perfiles predefinidos, API privada, `/goals`, evaluacion semanal y resumen goal-aware en Home, Dashboard y Analysis.
+- Contexto para check diario v1: capa central `lib/analytics/check-in-context.ts`, tipos en `types/check-in-context.ts`, texto completo/compacto copiable y card reutilizable en `components/check-in/check-in-context-card.tsx`.
 - Goals seguimiento: `/goals` ya no actua como planificador principal; prepara progreso, evidencia y contexto objetivo para el check diario con ChatGPT.
 - Plan semanal / Programaciones MVP: `planned_sessions` con RLS, CRUD privado, comparacion planificado vs realizado y resumen en Home, Dashboard y Analysis.
 - Training Log, detalle, weekly, running y muscle load funcionales sobre la capa actual de sesiones.
@@ -199,6 +202,7 @@ Reglas que deben preservarse:
 - Dashboard: panel de estado del periodo actual. Debe priorizar KPIs, lectura ejecutiva, riesgos principales, contexto para decision, tendencias clave y previews.
 - Analysis: vista profunda. Contiene analisis completo, informes semanales y mensuales, tendencias completas agrupadas, calidad de datos y contexto para check diario.
 - Objetivos: seguimiento del objetivo activo. Muestra progreso, senales a favor, senales en contra, datos insuficientes y contexto copiable. El Plan semanal queda como beta/opcional.
+- Contexto para check diario: resumen objetivo y copiable disponible en Goals y Analysis, con version compacta en Dashboard y Home.
 - Running: analisis especifico de carrera. No debe repetir lectura global salvo enlace a Analysis.
 - Muscle Load: analisis especifico de carga muscular. No debe repetir informes ni lectura global salvo enlace a Analysis.
 
@@ -212,6 +216,7 @@ Estado: primera capa implementada y pulida para decision.
 - Dashboard incorpora `Evolucion clave` con carrera estructurada/mixta, duracion, fatiga y peso movido.
 - Analysis incorpora graficos en Actual, Semanas, Meses, Tendencias y Calidad de datos.
 - Running incorpora carrera por semana, running estructurado, ritmo medio y zapatillas.
+- Running incorpora "Carga semanal y carrera" como grafica full-width superior: barras de km y sombreado relativo de carga no-running.
 - Muscle Load refuerza top musculos, ratios y sesiones clave sin implementar mapa corporal.
 - Home mantiene solo mini sparklines en KPIs del hero para no convertirse en dashboard.
 - `ChartCard` soporta valor actual, referencia compacta, estado, empty state y modo compacto.

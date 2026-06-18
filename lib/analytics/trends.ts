@@ -150,7 +150,8 @@ const posteriorMuscles: MuscleName[] = ["hamstrings", "glutes", "calves", "lats"
 const secondaryActivityTags = new Set(["secondary-activity", "padel", "hiking", "walking", "route", "recovery"]);
 
 function formatDateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  const localDate = parseDashboardDate(date);
+  return `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}`;
 }
 
 function roundValue(value: number, decimals = 1) {

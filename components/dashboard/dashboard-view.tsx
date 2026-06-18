@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ChartCard } from "@/components/charts/chart-card";
+import { CheckInContextCard } from "@/components/check-in/check-in-context-card";
 import { StackedRunBars } from "@/components/charts/stacked-run-bars";
 import { formatTrendValue, getTrendStatusTone, trendStatusLabels } from "@/components/charts/trend-card-chart";
 import { WeeklyBarChart } from "@/components/charts/weekly-bar-chart";
@@ -501,6 +502,18 @@ export function DashboardView({
           positiveSignal={goalPositiveSignal}
           negativeSignal={goalNegativeSignal}
           isLoading={goalContext.isLoading || isMetricsLoading}
+        />
+      </section>
+
+      <section className="mt-8">
+        <CheckInContextCard
+          context={goalContext.progress.checkInContextData}
+          text={goalContext.progress.checkInContext}
+          compactText={goalContext.progress.compactCheckInContext}
+          compact
+          showDetails={false}
+          detailHref="/analysis"
+          title="Contexto de la semana"
         />
       </section>
 

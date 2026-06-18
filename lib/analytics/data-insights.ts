@@ -564,7 +564,7 @@ function buildInsights(
         `Carrera total: ${formatKm(totalRun, { forceKm: true })}.`,
         `Top muscular: ${getMuscleNames(metrics.topMuscles.slice(0, 5))}.`,
       ],
-      recommendation: "Bajar impacto si notas rigidez y evitar series rápidas sin calentamiento específico.",
+      recommendation: "Se observa carrera con gemelos cargados; útil para valorar impacto, rigidez y calentamiento en el check diario.",
     });
   }
 

@@ -2,9 +2,10 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { RunningDataInsightCard } from "@/components/analytics/data-insights-panel";
 import { ChartCard } from "@/components/charts/chart-card";
 import { HorizontalRankingChart } from "@/components/charts/horizontal-ranking-chart";
+import { RunningContextCard } from "@/components/running/running-context-card";
+import { WeeklyRunningLoadChart } from "@/components/running/weekly-running-load-chart";
 import { StackedRunBars } from "@/components/charts/stacked-run-bars";
 import { WeeklyBarChart } from "@/components/charts/weekly-bar-chart";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +13,8 @@ import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonBlock } from "@/components/ui/skeleton";
-import { getTrainingDataInsights } from "@/lib/analytics/data-insights";
 import { getRunExposureChartData } from "@/lib/analytics/chart-data";
+import { buildRunningObjectiveContext, getWeeklyRunningLoadData } from "@/lib/analytics/running-load";
 import {
   getLatestDate,
   getPeriodRange,
@@ -137,7 +138,8 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
   const shoeVolumes = getRunningShoeVolumes(runningRows);
   const weeklySummaries = groupRunningByCalendarWeek(runningRows, 12);
   const runExposureChartData = useMemo(() => getRunExposureChartData(sessions).slice(-10), [sessions]);
-  const dataAnalysis = useMemo(() => getTrainingDataInsights(sessions, { period: "week" }), [sessions]);
+  const weeklyRunningLoadData = useMemo(() => getWeeklyRunningLoadData(sessions, 12), [sessions]);
+  const runningContext = useMemo(() => buildRunningObjectiveContext(sessions, weeklyRunningLoadData), [sessions, weeklyRunningLoadData]);
   const latestTrainingDate = getLatestDate(sessions);
   const weekReferenceDate = resolvePeriodReferenceDate("week", latestTrainingDate);
   const monthReferenceDate = resolvePeriodReferenceDate("month", latestTrainingDate);
@@ -146,6 +148,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
   const currentMonthExposure = getRunningBreakdown(filterSessionsByRange(sessions, getPeriodRange("month", monthReferenceDate)));
   const allExposure = getRunningBreakdown(sessions);
   const maxWeeklyMeters = Math.max(...weeklySummaries.map((week) => week.runMeters), 1);
+  const runningRowsWithRpe = runningRows.filter((row) => typeof row.session.rpe === "number" && row.session.rpe > 0).length;
   const paceRows = runningRows
     .filter((row) => row.paceSecondsPerKm !== null)
     .slice(0, 8)
@@ -178,11 +181,15 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
       </section>
       {syncMessage ? <p className="mb-5 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] p-3 text-sm text-[var(--muted-strong)]">{syncMessage}</p> : null}
 
+      <section className="mb-6">
+        <WeeklyRunningLoadChart data={weeklyRunningLoadData} isLoading={isMetricsLoading} />
+      </section>
+
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard
-          label="Esta semana"
+          label="Esta semana carrera total"
           value={formatKm(currentWeekExposure.totalRunExposureMeters, { forceKm: true })}
-          detail={`${formatKm(currentWeekExposure.structuredMeters, { forceKm: true })} running · ${formatKm(currentWeekExposure.mixedMeters, { forceKm: true })} mixto`}
+          detail={`${formatKm(currentWeekExposure.totalRunExposureMeters, { forceKm: true })} total · ${formatKm(currentWeekExposure.structuredMeters, { forceKm: true })} running · ${formatKm(currentWeekExposure.mixedMeters, { forceKm: true })} mixto`}
           delta={formatDelta(currentWeekExposure.totalRunExposureMeters, previousWeekExposure.totalRunExposureMeters, (value) => formatKm(value, { forceKm: true }))}
           deltaTone={getDeltaTone(currentWeekExposure.totalRunExposureMeters, previousWeekExposure.totalRunExposureMeters)}
           tone="strong"
@@ -191,18 +198,23 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
         <MetricCard
           label="Este mes"
           value={formatKm(currentMonthExposure.totalRunExposureMeters, { forceKm: true })}
-          detail="Volumen total de impacto"
+          detail={`${formatKm(currentMonthExposure.structuredMeters, { forceKm: true })} running · ${formatKm(currentMonthExposure.mixedMeters, { forceKm: true })} mixto`}
           tone="strong"
           state={monthKmState}
         />
         <MetricCard label="Sesiones running" value={`${historicalStats.sessions}`} detail="Solo type running" state={sessionsState} />
-        <MetricCard label="Duración running" value={formatDuration(historicalStats.durationMinutes)} detail="Histórico con dato" state={durationState} />
-        <MetricCard label="RPE medio running" value={formatRpe(historicalStats.averageRpe)} detail="Sesiones con RPE" state={rpeState} />
+        <MetricCard label="Duración running" value={formatDuration(historicalStats.durationMinutes)} detail="Solo type running con duración" state={durationState} />
+        <MetricCard
+          label="RPE medio running"
+          value={formatRpe(historicalStats.averageRpe)}
+          detail={`${runningRowsWithRpe} con dato · ${Math.max(0, runningRows.length - runningRowsWithRpe)} sin dato`}
+          state={rpeState}
+        />
       </section>
 
       <section className="mt-6 grid gap-5 xl:grid-cols-4">
         <ChartCard
-          title="Carrera por semana"
+          title="Detalle semanal de carrera"
           description="Running estructurado separado de carrera en sesiones mixtas."
           unit="km"
           compact
@@ -373,7 +385,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
         </div>
 
         <aside className="order-1 space-y-5 lg:order-2">
-          <RunningDataInsightCard analysis={dataAnalysis} isLoading={isMetricsLoading} />
+          <RunningContextCard context={runningContext} isLoading={isMetricsLoading} />
 
           <Card>
             <h3 className="text-lg font-semibold">Volumen de carrera histórico</h3>
@@ -397,7 +409,7 @@ export function RunningTrainingView({ seedSessions }: { seedSessions: TrainingSe
           </Card>
 
           <Card>
-            <h3 className="text-lg font-semibold">Running estructurado por semana</h3>
+            <h3 className="text-lg font-semibold">Detalle estructurado por semana</h3>
             {isMetricsLoading ? (
               <div className="mt-5 space-y-4" aria-label="Tendencia semanal calculando">
                 <SkeletonBlock className="h-8 w-full" />

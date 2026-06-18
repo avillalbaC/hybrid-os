@@ -491,7 +491,7 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
             </div>
           </Card>
           <Card>
-            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Acción recomendada</p>
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Contexto para decisión</p>
             <SkeletonBlock className="mt-4 h-7 w-3/4" />
             <SkeletonBlock className="mt-3 h-4 w-full" />
           </Card>
@@ -525,7 +525,7 @@ export function MuscleLoadView({ seedSessions }: { seedSessions: TrainingSession
               <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">{periodReading.summary}</p>
             </Card>
             <Card>
-              <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Acción recomendada</p>
+              <p className="text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--accent)]">Contexto para decisión</p>
               <p className="mt-3 text-lg font-semibold leading-7 text-[var(--foreground)]">{periodReading.recommendation}</p>
               {secondaryRecommendation ? (
                 <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{secondaryRecommendation}</p>

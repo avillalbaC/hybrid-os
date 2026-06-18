@@ -20,6 +20,7 @@ Indice de documentacion viva. Los snapshots de auditoria y notas de iteraciones 
 ## Analisis y planificacion
 
 - [Reglas de analisis](./analysis-rules.md)
+- [Contexto para check diario](./check-in-context.md)
 - [Visual Analytics](./visual-analytics.md)
 - [Daily Plan](./daily-plan.md)
 - [Objetivos activos](./goals.md)

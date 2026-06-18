@@ -433,7 +433,7 @@ export function evaluateGoalBlock({
       status: "risk",
       severity: "warning",
       explanation: "Para recomposición, intensidad alta con poca movilidad reduce margen de recuperación.",
-      recommendation: "Añade movilidad hoy y evita convertir la próxima sesión en otro estímulo duro.",
+      recommendation: "Movilidad registrada por debajo de la referencia junto a intensidad alta.",
     });
   }
 

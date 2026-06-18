@@ -62,6 +62,11 @@ Analysis:
 
 Running:
 
+- Carga semanal y carrera como grafica full-width superior.
+- Eje Y solo para kilometros de carrera.
+- Barras cyan/teal para running estructurado y carrera mixta.
+- Sombreado ambar para carga no-running normalizada dentro del rango visible.
+- Copy obligatorio: la carga no-running relativa no equivale a kilometros.
 - Carrera por semana con running estructurado frente a carrera mixta.
 - Running estructurado por semana.
 - Ritmo medio cuando hay distancia y duracion.

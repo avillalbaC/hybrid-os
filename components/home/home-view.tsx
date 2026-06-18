@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { QuickDataInsightCard } from "@/components/analytics/data-insights-panel";
+import { CheckInContextCard } from "@/components/check-in/check-in-context-card";
 import { MetricSparkline } from "@/components/charts/metric-sparkline";
 import { DailyPlanCard } from "@/components/home/daily-plan-card";
 import { WeeklyPlanCard } from "@/components/planning/weekly-plan-card";
@@ -553,6 +554,15 @@ export function HomeView({
           positiveSignal={goalPositiveSignal}
           negativeSignal={goalNegativeSignal}
           isLoading={goalContext.isLoading || isMetricsLoading}
+        />
+        <CheckInContextCard
+          context={goalContext.progress.checkInContextData}
+          text={goalContext.progress.checkInContext}
+          compactText={goalContext.progress.compactCheckInContext}
+          compact
+          showDetails={false}
+          detailHref="/analysis"
+          title="Copiar contexto para check diario"
         />
         <WeeklyPlanCard
           plannedSessions={weeklyPlanning.plannedSessions}
