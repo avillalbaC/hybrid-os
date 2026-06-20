@@ -1,3 +1,4 @@
+import { ActivityLegend } from "@/components/calendar/activity-legend";
 import { TrainingCalendarDayCell } from "@/components/calendar/training-calendar-day-cell";
 import type { CalendarDay } from "@/types/calendar";
 
@@ -22,6 +23,7 @@ export function TrainingCalendarGrid({
           <TrainingCalendarDayCell key={day.date} day={day} onSelect={onSelectDate} />
         ))}
       </div>
+      <ActivityLegend className="mt-3 border-t border-[var(--line)] pt-3" />
     </section>
   );
 }

@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { ActivityLegend } from "@/components/calendar/activity-legend";
 import { DisciplineBadge } from "@/components/calendar/discipline-badge";
 import { Card } from "@/components/ui/card";
 import { SkeletonBlock } from "@/components/ui/skeleton";
+import { getCalendarDayActivityVisual } from "@/lib/calendar/day-activity-style";
 import { formatDuration, formatKm } from "@/lib/utils/format";
 import type { CalendarDay } from "@/types/calendar";
 
@@ -18,16 +20,28 @@ const intensityClass: Record<CalendarDay["intensity"], string> = {
 function WeeklyDayPreview({ day }: { day: CalendarDay }) {
   const visibleDisciplines = day.disciplines.slice(0, 2);
   const hiddenDisciplines = Math.max(day.disciplines.length - visibleDisciplines.length, 0);
+  const activityVisual = getCalendarDayActivityVisual(day);
+  const dayStyle = activityVisual.borderColor
+    ? { borderColor: activityVisual.borderColor }
+    : undefined;
 
   return (
     <Link
       href={`/calendar?date=${day.date}`}
-      aria-label={`${day.date}${day.hasTraining ? `, ${day.sessions.length} sesiones` : ", sin entrenamiento"}`}
-      className={`min-h-[5.7rem] rounded-md border p-2 transition hover:border-[var(--accent-border)] hover:bg-[var(--accent-faint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${
+      aria-label={`${day.date}${day.hasTraining ? `, ${day.sessions.length} sesiones` : ", sin entrenamiento"}${
+        activityVisual.label ? `, ${activityVisual.label}` : ""
+      }`}
+      title={activityVisual.label ?? undefined}
+      style={dayStyle}
+      className={`relative min-h-[5.7rem] overflow-hidden rounded-md border p-2 transition hover:border-[var(--accent-border)] hover:bg-[var(--accent-faint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${
         intensityClass[day.intensity]
       } ${day.isToday ? "ring-1 ring-[var(--accent-border-strong)]" : ""}`}
     >
-      <div className="flex items-start justify-between gap-1">
+      {activityVisual.backgroundStyle ? (
+        <span aria-hidden="true" className="pointer-events-none absolute inset-0" style={activityVisual.backgroundStyle} />
+      ) : null}
+
+      <div className="relative z-10 flex items-start justify-between gap-1">
         <span className={`font-mono text-sm font-black ${day.isToday ? "text-[var(--accent-strong)]" : "text-[var(--foreground)]"}`}>
           {day.dayOfMonth}
         </span>
@@ -38,7 +52,7 @@ function WeeklyDayPreview({ day }: { day: CalendarDay }) {
         ) : null}
       </div>
 
-      <div className="mt-2 flex min-h-[1.2rem] flex-wrap gap-1">
+      <div className="relative z-10 mt-2 flex min-h-[1.2rem] flex-wrap gap-1">
         {visibleDisciplines.map((discipline) => (
           <DisciplineBadge key={discipline} discipline={discipline} compact />
         ))}
@@ -49,8 +63,8 @@ function WeeklyDayPreview({ day }: { day: CalendarDay }) {
         ) : null}
       </div>
 
-      <div className="mt-2 space-y-0.5 text-[0.62rem] font-bold uppercase tracking-[0.06em] text-[var(--muted)]">
-        {day.mobilityDone ? <p className="text-lime-100">Movilidad</p> : null}
+      <div className="relative z-10 mt-2 space-y-0.5 text-[0.62rem] font-bold uppercase tracking-[0.06em] text-[var(--muted-strong)]">
+        {day.mobilityDone ? <p className="text-orange-100">Movilidad</p> : null}
         {day.totalRunMeters > 0 ? <p>{formatKm(day.totalRunMeters, { forceKm: true })}</p> : null}
         {day.hasTraining && day.totalRunMeters <= 0 ? <p>{formatDuration(day.totalDurationMinutes, { compact: true, emptyLabel: "" })}</p> : null}
       </div>
@@ -104,6 +118,7 @@ export function WeeklyCalendarPreview({
               <WeeklyDayPreview key={day.date} day={day} />
             ))}
           </div>
+          <ActivityLegend className="mt-3" />
           <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
             <p className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-2">
               <span className="font-mono font-black text-[var(--foreground)]">{activeDays}/7</span>{" "}

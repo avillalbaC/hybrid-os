@@ -18,6 +18,7 @@ const navSections = [
     label: "Entrenamiento",
     items: [
       { href: "/training", label: "Training Log", marker: "L" },
+      { href: "/programming", label: "Programaciones", marker: "P" },
       { href: "/training/import", label: "Importar JSON", marker: "+" },
       { href: "/training/running", label: "Running", marker: "R" },
       { href: "/muscle-load", label: "Carga muscular", marker: "M" },

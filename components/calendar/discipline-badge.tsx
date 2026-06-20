@@ -1,4 +1,5 @@
 import type { CalendarDiscipline } from "@/types/calendar";
+import { activityTheme } from "@/lib/calendar/day-activity-style";
 
 type DisciplineConfig = {
   code: string;
@@ -10,42 +11,42 @@ export const disciplineConfig: Record<CalendarDiscipline, DisciplineConfig> = {
   running: {
     code: "RUN",
     label: "Running",
-    className: "border-cyan-300/30 bg-cyan-300/10 text-cyan-100",
+    className: activityTheme.running.badgeClassName,
   },
   hyrox: {
     code: "HX",
     label: "HYROX",
-    className: "border-amber-300/35 bg-amber-300/10 text-amber-100",
+    className: activityTheme.hyrox.badgeClassName,
   },
   crossfit: {
     code: "CF",
     label: "CrossFit",
-    className: "border-sky-300/30 bg-sky-300/10 text-sky-100",
+    className: activityTheme.crossfit.badgeClassName,
   },
   fuerza: {
     code: "STR",
     label: "Fuerza",
-    className: "border-emerald-300/30 bg-emerald-300/10 text-emerald-100",
+    className: activityTheme.support.badgeClassName,
   },
   halterofilia: {
     code: "WL",
     label: "Haltero",
-    className: "border-teal-300/30 bg-teal-300/10 text-teal-100",
+    className: activityTheme.support.badgeClassName,
   },
   gimnasticos: {
     code: "GYM",
     label: "Gimnásticos",
-    className: "border-violet-300/30 bg-violet-300/10 text-violet-100",
+    className: activityTheme.support.badgeClassName,
   },
   movilidad: {
     code: "MOB",
     label: "Movilidad",
-    className: "border-lime-300/30 bg-lime-300/10 text-lime-100",
+    className: activityTheme.support.badgeClassName,
   },
   actividad_funcional: {
     code: "ACT",
     label: "Actividad funcional",
-    className: "border-orange-300/30 bg-orange-300/10 text-orange-100",
+    className: activityTheme.support.badgeClassName,
   },
   mixed: {
     code: "MIX",

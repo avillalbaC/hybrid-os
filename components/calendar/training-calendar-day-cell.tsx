@@ -1,4 +1,5 @@
 import { DisciplineBadge } from "@/components/calendar/discipline-badge";
+import { getCalendarDayActivityVisual } from "@/lib/calendar/day-activity-style";
 import type { CalendarDay, CalendarDayIntensity } from "@/types/calendar";
 
 const intensityClass: Record<CalendarDayIntensity, string> = {
@@ -26,27 +27,43 @@ export function TrainingCalendarDayCell({
 }) {
   const visibleDisciplines = day.disciplines.slice(0, 3);
   const hiddenDisciplines = Math.max(day.disciplines.length - visibleDisciplines.length, 0);
+  const activityVisual = getCalendarDayActivityVisual(day);
+  const buttonStyle = activityVisual.borderColor && !day.isSelected
+    ? { borderColor: activityVisual.borderColor }
+    : undefined;
 
   return (
     <button
       type="button"
       onClick={() => onSelect(day.date)}
       aria-pressed={day.isSelected}
-      aria-label={`${day.date}${day.hasTraining ? `, ${day.sessions.length} sesiones` : ", sin entrenamiento"}`}
-      className={`min-h-[6.2rem] rounded-md border p-2 text-left transition hover:border-[var(--accent-border)] hover:bg-[var(--accent-faint)] focus-visible:border-[var(--accent-border-strong)] sm:min-h-[7.3rem] ${
+      aria-label={`${day.date}${day.hasTraining ? `, ${day.sessions.length} sesiones` : ", sin entrenamiento"}${
+        activityVisual.label ? `, ${activityVisual.label}` : ""
+      }`}
+      title={activityVisual.label ?? undefined}
+      style={buttonStyle}
+      className={`relative min-h-[6.2rem] overflow-hidden rounded-md border p-2 text-left transition hover:border-[var(--accent-border)] hover:bg-[var(--accent-faint)] focus-visible:border-[var(--accent-border-strong)] sm:min-h-[7.3rem] ${
         intensityClass[day.intensity]
       } ${day.isCurrentMonth ? "" : "opacity-45"} ${
         day.isToday ? "ring-1 ring-[var(--accent-border-strong)]" : ""
       } ${day.isSelected ? "border-[var(--accent-border-strong)] bg-[var(--accent-soft)] shadow-[inset_0_0_0_1px_var(--accent-border)]" : ""}`}
     >
-      <div className="flex items-start justify-between gap-2">
+      {activityVisual.backgroundStyle ? (
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-0 transition ${day.isSelected ? "opacity-80" : "opacity-100"}`}
+          style={activityVisual.backgroundStyle}
+        />
+      ) : null}
+
+      <div className="relative z-10 flex items-start justify-between gap-2">
         <span className={`font-mono text-sm font-black ${day.isToday ? "text-[var(--accent-strong)]" : "text-[var(--foreground)]"}`}>
           {day.dayOfMonth}
         </span>
         <span className={`mt-1 size-2 rounded-full ${intensityDotClass[day.intensity]}`} />
       </div>
 
-      <div className="mt-2 flex min-h-[1.4rem] flex-wrap gap-1">
+      <div className="relative z-10 mt-2 flex min-h-[1.4rem] flex-wrap gap-1">
         {visibleDisciplines.map((discipline) => (
           <DisciplineBadge key={discipline} discipline={discipline} compact />
         ))}
@@ -57,9 +74,9 @@ export function TrainingCalendarDayCell({
         ) : null}
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[0.64rem] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">
+      <div className="relative z-10 mt-2 flex flex-wrap items-center gap-1.5 text-[0.64rem] font-bold uppercase tracking-[0.08em] text-[var(--muted-strong)]">
         {day.sessions.length > 1 ? <span>{day.sessions.length} sesiones</span> : null}
-        {day.mobilityDone ? <span className="text-lime-100">MOB</span> : null}
+        {day.mobilityDone ? <span className="text-orange-100">MOB</span> : null}
         {day.totalRunMeters > 0 ? <span>{(day.totalRunMeters / 1000).toFixed(1)} km</span> : null}
       </div>
     </button>
