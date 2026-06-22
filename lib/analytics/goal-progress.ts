@@ -54,7 +54,7 @@ function getWeekLabel(referenceDate: Date) {
   const range = getPeriodRange("week", referenceDate);
 
   if (!range) {
-    return "Semana actual";
+    return "Semana en curso";
   }
 
   return formatRelativeWeekLabel(getWeekStartDateKey(range.start), getCurrentWeekStartLocal());
@@ -714,7 +714,7 @@ export function getGoalProgressSummary({
     goalProfileLabel: profileMeta?.title ?? null,
     period: weekRange
       ? {
-          label: "Semana actual",
+          label: "Semana en curso",
           startDate: formatDateKey(weekRange.start),
           endDate: formatDateKey(weekRange.end),
         }

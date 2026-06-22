@@ -186,7 +186,7 @@ export function buildRunningObjectiveContext(sessions: TrainingSession[], weekly
     headline = current.totalRunKm > 0 ? "Carrera registrada con referencia reciente limitada." : "Sin carrera registrada en la semana visible.";
     signalDetail = current.totalRunKm > 0
       ? "Hay volumen de carrera, pero faltan semanas comparables para leer tendencia."
-      : "No se observa distancia de carrera en la semana actual del gráfico.";
+      : "No se observa distancia de carrera en la semana en curso del gráfico.";
   } else if (changePercent !== null && changePercent >= 20) {
     headline = "Carrera total por encima de referencia reciente.";
     signalDetail = `${formatKmValue(current.totalRunKm)} esta semana frente a ${formatKmValue(recentAverage)} de media reciente.`;

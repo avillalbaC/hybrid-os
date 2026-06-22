@@ -42,14 +42,14 @@ function getDefaultPeriod(referenceDate: Date): CheckInContextPeriod {
   if (!range) {
     const date = formatDateKey(referenceDate);
     return {
-      label: "Semana actual",
+      label: "Semana en curso",
       startDate: date,
       endDate: date,
     };
   }
 
   return {
-    label: "Semana actual",
+    label: "Semana en curso",
     startDate: formatDateKey(range.start),
     endDate: formatDateKey(range.end),
   };
@@ -174,7 +174,7 @@ function getNutritionSummary(nutritionChecks: NutritionCheck[], period: CheckInC
     available: true,
     notes: [
       `Dato disponible: ${periodChecks.length} nutrition checks en el periodo.`,
-      ...(periodChecks.length === 0 ? ["Dato insuficiente: sin nutrition checks dentro de la semana actual."] : []),
+      ...(periodChecks.length === 0 ? ["Dato insuficiente: sin nutrition checks dentro del periodo."] : []),
     ],
   };
 }

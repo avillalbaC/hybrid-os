@@ -3,9 +3,9 @@
 export type AnalysisTab = "current" | "weeks" | "months" | "trends" | "data-quality";
 
 const tabs: Array<{ id: AnalysisTab; label: string }> = [
-  { id: "current", label: "Actual" },
-  { id: "weeks", label: "Semanas" },
-  { id: "months", label: "Meses" },
+  { id: "current", label: "Resumen" },
+  { id: "weeks", label: "Histórico semanal" },
+  { id: "months", label: "Histórico mensual" },
   { id: "trends", label: "Tendencias" },
   { id: "data-quality", label: "Calidad de datos" },
 ];

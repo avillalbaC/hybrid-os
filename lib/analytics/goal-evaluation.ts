@@ -35,7 +35,7 @@ function getWeekLabel(referenceDate: Date) {
   const range = getPeriodRange("week", referenceDate);
 
   if (!range) {
-    return "Semana actual";
+    return "Semana en curso";
   }
 
   return formatRelativeWeekLabel(getWeekStartDateKey(range.start), getCurrentWeekStartLocal());

@@ -108,8 +108,8 @@ export function PeriodReportsSection({
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Informes generados en cliente desde sesiones reales, sin guardar nada nuevo.</p>
         </div>
         <div className="flex gap-2">
-          <TabButton active={tab === "weeks"} onClick={() => setTab("weeks")}>Semanas</TabButton>
-          <TabButton active={tab === "months"} onClick={() => setTab("months")}>Meses</TabButton>
+          <TabButton active={tab === "weeks"} onClick={() => setTab("weeks")}>Histórico semanal</TabButton>
+          <TabButton active={tab === "months"} onClick={() => setTab("months")}>Histórico mensual</TabButton>
         </div>
       </div>
 
