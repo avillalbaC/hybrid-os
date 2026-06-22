@@ -1,6 +1,7 @@
 import { CheckInContextCard } from "@/components/check-in/check-in-context-card";
 import { ChartCard } from "@/components/charts/chart-card";
 import { HorizontalRankingChart } from "@/components/charts/horizontal-ranking-chart";
+import { ScatterCard } from "@/components/charts/scatter-card";
 import { StackedRunBars } from "@/components/charts/stacked-run-bars";
 import { StackedWeeklyBars } from "@/components/charts/stacked-weekly-bars";
 import { WeeklyBarChart } from "@/components/charts/weekly-bar-chart";
@@ -13,6 +14,7 @@ import {
   buildCompactCheckInContextText,
 } from "@/lib/analytics/check-in-context";
 import {
+  buildDurationRpeScatterData,
   buildIntensityDistributionData,
   buildMuscleRankingData,
   buildRunningSplitData,
@@ -26,18 +28,20 @@ import {
   getWeeklyAnalysisRange,
   type WeeklyAnalysisReport,
 } from "@/lib/analytics/weekly-analysis";
+import { getCalendarDayActivityVisual } from "@/lib/calendar/day-activity-style";
 import type { DashboardPeriod } from "@/lib/domain/dashboard/periods";
 import { formatDuration, formatKm, formatRpe, formatTrainingType } from "@/lib/utils/format";
 import type { BodyCheck } from "@/types/body";
 import type { NutritionCheck } from "@/types/nutrition";
 import type { PlannedSession } from "@/types/planning";
 import type { ProgrammingSession } from "@/types/programming";
-import type { TrainingSession } from "@/types/training";
+import type { TrainingExercise, TrainingSession } from "@/types/training";
 
 type DaySummary = {
   date: string;
   dayLabel: string;
   sessions: TrainingSession[];
+  primaryType: string | null;
   primaryDiscipline: string;
   durationMinutes: number;
   averageRpe: number | null;
@@ -79,6 +83,20 @@ function getPrimaryDiscipline(sessions: TrainingSession[]) {
   return formatTrainingType(type);
 }
 
+function getPrimaryType(sessions: TrainingSession[]) {
+  if (sessions.length === 0) {
+    return null;
+  }
+
+  const counts = sessions.reduce<Record<string, number>>((acc, session) => {
+    acc[session.type] = (acc[session.type] ?? 0) + 1;
+    return acc;
+  }, {});
+  const [type] = Object.entries(counts).sort(([, a], [, b]) => b - a)[0];
+
+  return type;
+}
+
 function getWeekDays(report: WeeklyAnalysisReport): DaySummary[] {
   const start = parseDateKey(report.range.startDate);
 
@@ -94,6 +112,7 @@ function getWeekDays(report: WeeklyAnalysisReport): DaySummary[] {
       date: dateKey,
       dayLabel: new Intl.DateTimeFormat("es-ES", { weekday: "short", day: "2-digit" }).format(date),
       sessions: daySessions,
+      primaryType: getPrimaryType(daySessions),
       primaryDiscipline: getPrimaryDiscipline(daySessions),
       durationMinutes,
       averageRpe: getAverageRpe(daySessions),
@@ -238,23 +257,42 @@ function WeekAtGlance({ report }: { report: WeeklyAnalysisReport }) {
         <div className="grid min-w-[760px] grid-cols-7 gap-2">
           {days.map((day) => {
             const loadPercent = Math.round((day.fatigueCost / maxFatigue) * 100);
+            const hasSession = day.sessions.length > 0;
+            const visual = getCalendarDayActivityVisual({ sessions: day.sessions });
             return (
-              <article key={day.date} className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
+              <article
+                key={day.date}
+                className={`rounded-md border p-3 ${hasSession ? "bg-[rgba(244,247,244,0.035)]" : "bg-[rgba(244,247,244,0.012)] opacity-70"}`}
+                style={{
+                  ...visual.backgroundStyle,
+                  borderColor: visual.borderColor ?? "var(--line)",
+                }}
+              >
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--muted)]">{day.dayLabel}</p>
-                  <span className="rounded border border-[var(--line)] px-1.5 py-0.5 font-mono text-[0.62rem] font-black text-[var(--muted-strong)]">
-                    {day.sessions.length}
-                  </span>
+                  {hasSession ? (
+                    <span className="rounded border border-[var(--line)] bg-[rgba(7,10,9,0.38)] px-1.5 py-0.5 font-mono text-[0.62rem] font-black text-[var(--muted-strong)]">
+                      {day.sessions.length}
+                    </span>
+                  ) : null}
                 </div>
-                <p className="mt-3 min-h-10 text-sm font-black leading-5 text-[var(--foreground)]">{day.primaryDiscipline}</p>
-                <div className="mt-3 space-y-1 text-xs leading-5 text-[var(--muted-strong)]">
-                  <p>{formatDuration(day.durationMinutes, { emptyLabel: "0 min" })}</p>
-                  <p>RPE {formatRpe(day.averageRpe)}</p>
-                  <p>{formatKm(day.runMeters, { forceKm: day.runMeters >= 1000, emptyLabel: "0 m" })}</p>
-                </div>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[rgba(244,247,244,0.08)]">
-                  <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${loadPercent}%` }} />
-                </div>
+                <p className={`mt-3 min-h-10 text-sm font-black leading-5 ${hasSession ? "text-[var(--foreground)]" : "text-[var(--muted)]"}`}>
+                  {day.primaryDiscipline}
+                </p>
+                {hasSession ? (
+                  <>
+                    <div className="mt-3 flex flex-wrap gap-1.5 text-[0.68rem] font-bold leading-5 text-[var(--muted-strong)]">
+                      {day.durationMinutes > 0 ? <span className="rounded border border-[var(--line)] bg-[rgba(7,10,9,0.28)] px-1.5">{formatDuration(day.durationMinutes)}</span> : null}
+                      {day.averageRpe !== null ? <span className="rounded border border-[var(--line)] bg-[rgba(7,10,9,0.28)] px-1.5">RPE {formatRpe(day.averageRpe)}</span> : null}
+                      {day.runMeters > 0 ? <span className="rounded border border-[var(--line)] bg-[rgba(7,10,9,0.28)] px-1.5">{formatKm(day.runMeters, { forceKm: true })}</span> : null}
+                    </div>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[rgba(244,247,244,0.08)]">
+                      <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${loadPercent}%` }} />
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-3 text-xs leading-5 text-[var(--muted)]">Sin registro</p>
+                )}
               </article>
             );
           })}
@@ -306,23 +344,27 @@ function ExpectedSection({ report, isLoading }: { report: WeeklyAnalysisReport; 
         <div className="mt-4 grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
           <dl className="grid grid-cols-2 gap-2">
             <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
-              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Esperado</dt>
+              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Sesiones programadas</dt>
               <dd className="mt-1 font-mono text-2xl font-black">{report.expected.expectedSessions}</dd>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                {report.expected.programmingSessions} programaciones · {report.expected.plannedSessions} planificadas
+              </p>
             </div>
             <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
-              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Realizado</dt>
+              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Completadas</dt>
               <dd className="mt-1 font-mono text-2xl font-black">{report.expected.completedSessions}</dd>
             </div>
             <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
-              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Pendiente</dt>
+              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Pendientes</dt>
               <dd className="mt-1 font-mono text-2xl font-black">{report.expected.pendingSessions}</dd>
             </div>
             <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
-              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Saltado</dt>
+              <dt className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Saltadas</dt>
               <dd className="mt-1 font-mono text-2xl font-black">{report.expected.skippedSessions}</dd>
             </div>
           </dl>
           <div className="grid gap-2">
+            <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Cumplimiento por tipo</p>
             {report.expected.byDiscipline.map((item) => (
               <div key={item.key} className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3">
                 <div className="flex items-center justify-between gap-3 text-sm">
@@ -342,28 +384,121 @@ function ExpectedSection({ report, isLoading }: { report: WeeklyAnalysisReport; 
   );
 }
 
+type HighlightItem = {
+  key: string;
+  movement: string;
+  value: string;
+  context: string;
+};
+
+function getExerciseName(exercise: TrainingExercise) {
+  return exercise.canonicalName || exercise.name;
+}
+
+function getHighlightedData(report: WeeklyAnalysisReport): HighlightItem[] {
+  const loads = new Map<string, HighlightItem & { rawValue: number }>();
+
+  report.sessions.forEach((session) => {
+    session.blocks.forEach((block) => {
+      block.exercises.forEach((exercise) => {
+        if (!exercise.loadKg || exercise.loadKg <= 0) {
+          return;
+        }
+
+        const key = getExerciseName(exercise);
+        const current = loads.get(key);
+
+        if (!current || exercise.loadKg > current.rawValue) {
+          loads.set(key, {
+            key,
+            movement: exercise.name,
+            value: `${Math.round(exercise.loadKg).toLocaleString("es-ES")} kg`,
+            context: `${session.title} · ${session.date}`,
+            rawValue: exercise.loadKg,
+          });
+        }
+      });
+    });
+  });
+
+  const loadHighlights = Array.from(loads.values())
+    .sort((a, b) => b.rawValue - a.rawValue)
+    .slice(0, 5)
+    .map((item) => ({
+      key: item.key,
+      movement: item.movement,
+      value: item.value,
+      context: item.context,
+    }));
+
+  if (loadHighlights.length > 0) {
+    return loadHighlights;
+  }
+
+  return [
+    ...(report.summary.totalRunMeters > 0
+      ? [{
+          key: "running-total",
+          movement: "Carrera total",
+          value: formatKm(report.summary.totalRunMeters, { forceKm: true }),
+          context: report.summary.structuredRunMeters > 0 ? "Incluye running estructurado." : "Impacto dentro de sesiones mixtas.",
+        }]
+      : []),
+    ...(report.summary.fatigueCost !== null
+      ? [{
+          key: "fatigue",
+          movement: "Fatiga semanal",
+          value: `${report.summary.fatigueCost}`,
+          context: `${report.summary.sessions} sesiones registradas.`,
+        }]
+      : []),
+  ].slice(0, 3);
+}
+
 function ProgressSection({ report }: { report: WeeklyAnalysisReport }) {
-  const progressItems = report.progress.filter((item) => item.id !== "no-progress-reference");
+  const comparableItems = report.progress.filter((item) => item.label === "Mejora frente a última referencia");
+  const highlightedData = getHighlightedData(report);
 
   return (
     <Card>
       <SectionHeading eyebrow="Comparables" title="Progreso y marcas" description="Solo se compara cuando existe misma métrica, movimiento, distancia o título." />
-      {progressItems.length === 0 ? (
-        <p className="mt-4 rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-3 text-sm leading-6 text-[var(--muted-strong)]">
-          Sin marcas comparables esta semana.
-        </p>
-      ) : (
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          {progressItems.map((item) => (
-            <article key={item.id} className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-4">
-              <Badge tone={item.label === "Mejora frente a última referencia" ? "accent" : "neutral"}>{mapProgressLabel(item.label)}</Badge>
-              <h4 className="mt-3 font-black text-[var(--foreground)]">{item.title}</h4>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{item.detail}</p>
-              <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{item.evidence}</p>
-            </article>
-          ))}
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-4">
+          <h4 className="font-black text-[var(--foreground)]">Marcas comparables</h4>
+          {comparableItems.length === 0 ? (
+            <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">Sin marcas comparables esta semana.</p>
+          ) : (
+            <div className="mt-3 grid gap-2">
+              {comparableItems.map((item) => (
+                <div key={item.id} className="rounded border border-[rgba(34,211,238,0.18)] bg-[var(--accent-faint)] p-3">
+                  <Badge tone="accent">{mapProgressLabel(item.label)}</Badge>
+                  <p className="mt-2 font-bold text-[var(--foreground)]">{item.title}</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--muted-strong)]">{item.detail}</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{item.evidence}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+        <div className="rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.025)] p-4">
+          <h4 className="font-black text-[var(--foreground)]">Datos destacados</h4>
+          {highlightedData.length === 0 ? (
+            <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">Sin datos destacados con el registro actual.</p>
+          ) : (
+            <div className="mt-3 divide-y divide-[rgba(244,247,244,0.08)]">
+              {highlightedData.map((item) => (
+                <div key={item.key} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 py-2 first:pt-0 last:pb-0">
+                  <div>
+                    <p className="text-sm font-bold text-[var(--foreground)]">{item.movement}</p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{item.context}</p>
+                  </div>
+                  <p className="font-mono text-sm font-black text-[var(--muted-strong)]">{item.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }
@@ -424,6 +559,7 @@ function SupportCharts({
   const weeklyData = buildWeeklyTrainingLoadData(sessions).slice(-8);
   const runningSplit = buildRunningSplitData(sessions).slice(-8);
   const intensityStack = buildIntensityDistributionData(sessions).slice(-8);
+  const scatterData = buildDurationRpeScatterData(report.sessions, "all");
   const muscleRanking = buildMuscleRankingData(report.sessions, "all").slice(0, 5);
 
   return (
@@ -445,24 +581,6 @@ function SupportCharts({
           />
         </ChartCard>
 
-        <ChartCard title="Running estructurado vs mixto" description="Carrera pura separada del impacto dentro de sesiones mixtas." unit="km">
-          <StackedRunBars
-            data={runningSplit.map((week) => ({
-              key: week.key,
-              label: week.label,
-              metaLabel: week.metaLabel,
-              isCurrentWeek: week.isCurrentWeek,
-              structuredRunMeters: (week.segments.find((segment) => segment.key === "running")?.value ?? 0) * 1000,
-              mixedRunMeters: (week.segments.find((segment) => segment.key === "mixed")?.value ?? 0) * 1000,
-            }))}
-            formatter={(value) => formatKm(value, { forceKm: true })}
-          />
-        </ChartCard>
-
-        <ChartCard title="Intensidad semanal" description="RPE bajo, moderado, alto y sin dato." unit="sesiones">
-          <StackedWeeklyBars data={intensityStack} formatter={(value) => `${Math.round(value)}`} />
-        </ChartCard>
-
         <ChartCard title="Top músculos del informe" description="Carga muscular agregada en el rango seleccionado." unit="pts" isEmpty={muscleRanking.length === 0}>
           <HorizontalRankingChart
             items={muscleRanking.map((item) => ({ key: item.muscle, label: item.label, value: item.load, percentage: item.percentage }))}
@@ -470,6 +588,35 @@ function SupportCharts({
           />
         </ChartCard>
       </div>
+      <details className="group rounded-md border border-[var(--line)] bg-[rgba(244,247,244,0.018)] p-4">
+        <summary className="cursor-pointer list-none rounded-md text-sm font-black text-[var(--accent)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]">
+          <span className="group-open:hidden">Ver más gráficas</span>
+          <span className="hidden group-open:inline">Ocultar gráficas adicionales</span>
+        </summary>
+        <div className="mt-4 grid gap-5 xl:grid-cols-3">
+          <ChartCard title="Running estructurado vs mixto" description="Carrera pura separada del impacto dentro de sesiones mixtas." unit="km">
+            <StackedRunBars
+              data={runningSplit.map((week) => ({
+                key: week.key,
+                label: week.label,
+                metaLabel: week.metaLabel,
+                isCurrentWeek: week.isCurrentWeek,
+                structuredRunMeters: (week.segments.find((segment) => segment.key === "running")?.value ?? 0) * 1000,
+                mixedRunMeters: (week.segments.find((segment) => segment.key === "mixed")?.value ?? 0) * 1000,
+              }))}
+              formatter={(value) => formatKm(value, { forceKm: true })}
+            />
+          </ChartCard>
+
+          <ChartCard title="Intensidad semanal" description="RPE bajo, moderado, alto y sin dato." unit="sesiones">
+            <StackedWeeklyBars data={intensityStack} formatter={(value) => `${Math.round(value)}`} />
+          </ChartCard>
+
+          <ChartCard title="Duración vs RPE" description="Sesiones del informe con duración y RPE disponibles." unit="min / RPE" isEmpty={scatterData.length === 0}>
+            <ScatterCard data={scatterData} />
+          </ChartCard>
+        </div>
+      </details>
     </section>
   );
 }
